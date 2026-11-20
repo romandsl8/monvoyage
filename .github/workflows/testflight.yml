@@ -76,26 +76,43 @@ jobs:
 
       - name: Tests unitaires (le build échoue si un test échoue)
         run: |
-          set -o pipefail
           mkdir -p build
-          SIM_ID=$(xcrun simctl list devices available -j | python3 -c '
-          import json, sys
-          data = json.load(sys.stdin)["devices"]
-          runtimes = sorted(k for k in data if "iOS" in k)
-          for runtime in reversed(runtimes):
-              phones = [d for d in data[runtime] if d["name"].startswith("iPhone")]
+          # Simulateurs iPhone candidats : uniquement les systèmes iOS ≥ 26 réellement installés,
+          # du plus récent au plus ancien (l'image GitHub peut annoncer un runtime absent).
+          xcrun simctl list runtimes -j > build/runtimes.json
+          xcrun simctl list devices -j > build/devices.json
+          CANDIDATES=$(python3 - <<'PY'
+          import json
+          runtimes = json.load(open("build/runtimes.json"))["runtimes"]
+          devices = json.load(open("build/devices.json"))["devices"]
+          ios = [r for r in runtimes if r.get("platform", "iOS") == "iOS" and r.get("isAvailable")
+                 and int(r["version"].split(".")[0]) >= 26]
+          ios.sort(key=lambda r: [int(x) for x in r["version"].split(".")], reverse=True)
+          for r in ios:
+              phones = [d for d in devices.get(r["identifier"], []) if d["name"].startswith("iPhone") and d.get("isAvailable", True)]
               if phones:
-                  print(phones[0]["udid"]); break
-          ')
-          echo "Simulateur : $SIM_ID"
-          xcodebuild test \
-            -project "$XCODE_PROJECT" \
-            -scheme "$XCODE_SCHEME" \
-            -destination "id=$SIM_ID" \
-            CODE_SIGNING_ALLOWED=NO \
-            > build/xcodebuild-test.log 2>&1 || true
-          grep -E "error:|Test Case .* failed|\*\* TEST" build/xcodebuild-test.log | tail -60 || true
-          grep -q "\*\* TEST SUCCEEDED \*\*" build/xcodebuild-test.log
+                  print(phones[0]["udid"], r["version"])
+          PY
+          )
+          echo "Candidats :"; echo "$CANDIDATES"
+          ok=0
+          while read -r SIM_ID VERSION; do
+            [ -z "$SIM_ID" ] && continue
+            echo "== Tests sur le simulateur iOS $VERSION ($SIM_ID)"
+            xcodebuild test \
+              -project "$XCODE_PROJECT" \
+              -scheme "$XCODE_SCHEME" \
+              -destination "id=$SIM_ID" \
+              CODE_SIGNING_ALLOWED=NO \
+              > build/xcodebuild-test.log 2>&1 || true
+            if grep -q "\*\* TEST SUCCEEDED \*\*" build/xcodebuild-test.log; then ok=1; break; fi
+            if grep -qE "runtime is not available|Unable to boot|Unable to find a destination|Failed to install" build/xcodebuild-test.log; then
+              echo "Simulateur indisponible, essai du suivant…"; continue
+            fi
+            break   # vrai échec de compilation ou de test
+          done <<< "$CANDIDATES"
+          grep -E "error:|Test Case .* failed|\*\* TEST|not available" build/xcodebuild-test.log | tail -60 || true
+          [ "$ok" = 1 ]
 
       - name: Signature (profils App Store pour l'appli et le widget)
         run: |
