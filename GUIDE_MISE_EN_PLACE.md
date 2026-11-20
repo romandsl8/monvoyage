@@ -11,7 +11,7 @@ Durée totale : 1 h 30 environ la première fois (dont 20 à 40 min d'attente de
 
 ## 0. Les identifiants (à garder sous la main)
 
-Ils sont centralisés **en haut de `project.yml`** et dans la section `vars` de **`codemagic.yaml`**. Si vous en changez un, changez-le aux deux endroits.
+Ils sont centralisés **en haut de `project.yml`** et dans la section `env` de **`.github/workflows/testflight.yml`**. Si vous en changez un, changez-le aux deux endroits.
 
 | Élément | Valeur |
 | --- | --- |
@@ -21,7 +21,7 @@ Ils sont centralisés **en haut de `project.yml`** et dans la section `vars` de 
 | Bundle ID du widget | `fr.tanguy.monvoyage.widget` |
 | Conteneur iCloud | `iCloud.fr.tanguy.monvoyage` |
 | App Group | `group.fr.tanguy.monvoyage` |
-| Nom de la clé API dans Codemagic | `APP_STORE_CONNECT_INTEGRATION` (à remplacer par le vrai nom) |
+| Identifiant Apple de l'appli | `6837239666` |
 
 Ces identifiants sont **définitifs** : on ne les change plus une fois l'appli publiée (sinon les données iCloud ne suivent pas).
 
@@ -120,7 +120,7 @@ Site : **https://developer.apple.com/account** → **Certificates, Identifiers &
 2. **Description** : `MonVoyage Widget` ; **Bundle ID** *Explicit* : `fr.tanguy.monvoyage.widget`.
 3. Cochez **App Groups** → **Continue** → **Register**, puis rouvrez-le → **App Groups → Configure** → cochez `group.fr.tanguy.monvoyage` → **Save**.
 
-> ⚠️ Si vous modifiez plus tard une capacité d'un App ID, allez dans **Profiles** et **supprimez** les profils « MonVoyage » existants : Codemagic les recréera avec les bonnes capacités.
+> ⚠️ Si vous modifiez plus tard une capacité d'un App ID, allez dans **Profiles** et **supprimez** les profils « MonVoyage » existants : le prochain build les recréera avec les bonnes capacités.
 
 ---
 
@@ -135,7 +135,7 @@ Site : **https://appstoreconnect.apple.com** → **Apps**.
    Le nom de la fiche n'a aucune importance pour TestFlight ; le nom **sous l'icône** reste `MonVoyage`.
 4. Dans la fiche : menu de gauche **Informations sur l'app** → section *Informations générales* → **Identifiant Apple** : un nombre à 10 chiffres (ex. `6741234567`).
 
-> 🔁 **Notez l'Identifiant Apple numérique.** Vous le mettrez dans `codemagic.yaml` (`APP_STORE_APPLE_ID`) — ou envoyez-le à Claude Code qui le fera.
+> 🔁 **Notez l'Identifiant Apple numérique.** Vous le mettrez dans `.github/workflows/testflight.yml` (`APP_STORE_APPLE_ID`) — ou envoyez-le à Claude Code qui le fera.
 
 ### 3.1 TestFlight : testeurs
 1. **Utilisateurs et accès** (menu du haut) → **+** : invitez la 2e personne avec son adresse Apple ID, rôle **Marketing** (le plus restreint suffit). Elle doit accepter l'e-mail d'invitation.
@@ -147,63 +147,48 @@ Les deux personnes installent l'appli **TestFlight** depuis l'App Store sur leur
 
 ---
 
-## 4. Clé API App Store Connect dans Codemagic
+## 4. Clés Apple dans les secrets GitHub
 
-### 4.1 Créer (ou réutiliser) la clé
-- **Vous avez déjà une clé pour votre appli précédente ?** Réutilisez-la : elle sert pour toutes vos apps. Passez à 4.2.
-- Sinon : **App Store Connect → Utilisateurs et accès → Intégrations → API App Store Connect → Clés d'équipe** → **+**
-  - Nom : `Codemagic` ; Accès : **Admin** → **Générer**.
-  - Notez l'**Issuer ID** (en haut) et le **Key ID** ; cliquez **Télécharger la clé API** (fichier `AuthKey_XXXX.p8`, téléchargeable **une seule fois**).
+Les builds tournent sur **GitHub Actions** (machine Mac `xcode-27`, Xcode 27.2), avec les outils open source `codemagic-cli-tools` pour la signature. Tout se règle dans **https://github.com/romandsl8/monvoyage/settings/secrets/actions** → onglet **Secrets** → **New repository secret**.
 
-### 4.2 L'ajouter dans Codemagic
-1. **https://codemagic.io** → connectez-vous → menu **Teams** → votre équipe → **Team settings** → **Team integrations** → **Developer Portal** → **Manage keys** (ou **Connect**).
-2. **Add key** : **App Store Connect API key name** = un nom simple, par exemple `MonVoyageASC`. Collez l'**Issuer ID**, le **Key ID**, et déposez le fichier **.p8** → **Save**.
-3. Mettez **exactement ce nom** dans `codemagic.yaml`, ligne `app_store_connect: APP_STORE_CONNECT_INTEGRATION`.
+> Quota : un dépôt privé dispose d'environ **200 minutes Mac gratuites par mois** (les minutes Mac comptent ×10 sur les 2 000 minutes gratuites). Un build TestFlight prend 15 à 25 min, l'import du schéma 2 à 3 min. Les modifications de documentation ne relancent pas de build.
 
-> 🔁 **Envoyez à Claude Code le nom de la clé** (ex. `MonVoyageASC`) : il mettra à jour `codemagic.yaml` et poussera.
+### 4.1 Clé API App Store Connect
+1. **https://appstoreconnect.apple.com/access/integrations/api** → onglet **Clés d'équipe** → **+** (ou **Générer une clé API**).
+2. Nom : `GitHub` ; Accès : **Admin** → **Générer**.
+3. Notez l'**Issuer ID** (en haut de la page) et le **Key ID** de la clé ; cliquez **Télécharger** (fichier `AuthKey_XXXXXXXXXX.p8`, téléchargeable **une seule fois**).
+4. Créez 3 secrets GitHub :
+   - `APP_STORE_CONNECT_ISSUER_ID` = l'Issuer ID ;
+   - `APP_STORE_CONNECT_KEY_IDENTIFIER` = le Key ID ;
+   - `APP_STORE_CONNECT_PRIVATE_KEY` = le **contenu complet** du fichier `.p8` (ouvrez-le avec le Bloc-notes : de `-----BEGIN PRIVATE KEY-----` à `-----END PRIVATE KEY-----`).
 
-### 4.3 Clé privée du certificat (CERTIFICATE_PRIVATE_KEY)
-Codemagic a besoin d'une clé privée pour créer/réutiliser votre certificat de distribution.
-- **Votre appli précédente sur Codemagic en avait une** (variable `CERTIFICATE_PRIVATE_KEY`) : **réutilisez la même valeur**. C'est important : Apple limite le nombre de certificats.
-- Sinon, créez-en une sur Windows : ouvrez **PowerShell** et tapez :
-  ```
-  ssh-keygen -t rsa -b 2048 -m PEM -f cert_key -q -N '""'
-  ```
-  puis `notepad cert_key` et copiez **tout** le contenu (de `-----BEGIN RSA PRIVATE KEY-----` à `-----END RSA PRIVATE KEY-----`). Gardez ce fichier en lieu sûr.
+### 4.2 Clé privée du certificat
+- Secret `CERTIFICATE_PRIVATE_KEY` = le contenu complet du fichier `cert_key` (de `-----BEGIN RSA PRIVATE KEY-----` à `-----END RSA PRIVATE KEY-----`). Utilisez **la même clé** que précédemment : Apple limite le nombre de certificats.
+- Si vous n'en avez pas, dans **PowerShell** : `ssh-keygen -t rsa -b 2048 -m PEM -f cert_key -q -N '""'` puis `notepad cert_key`.
 
 ---
 
-## 5. Codemagic : ajouter l'appli et lancer le premier build
+## 5. Lancer un build TestFlight
 
-1. **https://codemagic.io/apps** → **Add application** → **GitHub** (autorisez Codemagic à accéder au dépôt `monvoyage` si demandé) → choisissez `monvoyage` → **Project type : Other** → **Finish**.
-2. Si on vous propose *Workflow Editor* ou *codemagic.yaml*, choisissez **codemagic.yaml** (le fichier est déjà dans le dépôt).
-3. Dans l'appli Codemagic → onglet **Environment variables** :
-   - **Variable name** : `CERTIFICATE_PRIVATE_KEY` ; **Variable value** : la clé de l'étape 4.3 ; **Group** : tapez `monvoyage_signing` (création du groupe) ; cochez **Secret** → **Add**.
-4. Vérifiez dans `codemagic.yaml` (section `vars`) :
-   - `APP_STORE_APPLE_ID` = l'identifiant numérique de l'étape 3 ;
-   - `CLOUDKIT_ENV: Production` ;
-   - `app_store_connect:` = le nom de votre clé (4.2).
-5. Lancez : bouton **Start new build** → Branch `main` → Workflow `MonVoyage → TestFlight` → **Start new build**.
-   (Ensuite, chaque `push` sur `main` lance un build automatiquement.)
-6. ✅ Vérification : toutes les étapes passent au vert (≈ 20 à 40 min). Ensuite, App Store Connect traite le build (5 à 30 min) et TestFlight envoie une notification.
+1. Onglet **Actions** du dépôt → à gauche **MonVoyage → TestFlight** → **Run workflow** → **Run workflow**.
+   Ensuite, chaque modification du code poussée sur `main` lance un build automatiquement.
+2. ✅ Toutes les étapes passent au vert (15 à 25 min). App Store Connect traite ensuite le build (5 à 30 min) ; grâce au groupe interne à distribution automatique, il arrive dans TestFlight.
 
-> 🔁 **Si une étape est rouge** : cliquez dessus, copiez les **30 dernières lignes** et envoyez-les à Claude Code (voir étape 9).
+> 🔁 **Si une étape est rouge** : cliquez le build, puis l'étape rouge, copiez les dernières lignes et envoyez-les à Claude Code (voir étape 9).
 
 ---
 
 ## 6. Schéma CloudKit (une fois, puis après chaque changement du modèle)
 
-Pourquoi : les builds TestFlight utilisent **toujours** l'environnement iCloud **Production**, vide au départ, et l'appli ne peut pas y créer la structure (le « schéma »). Codemagic (qui tourne sur Mac) importe le schéma dans l'environnement **Development** avec l'outil d'Apple `cktool`, puis vous le déployez en Production depuis la console web.
+Pourquoi : les builds TestFlight utilisent **toujours** l'environnement iCloud **Production**, vide au départ, et l'appli ne peut pas y créer la structure (le « schéma »). Le workflow GitHub **Schéma CloudKit → Development** (sur Mac) importe le schéma dans l'environnement **Development** avec l'outil d'Apple `cktool`, puis vous le déployez en Production depuis la console web.
 
-### 6.1 Jeton de gestion CloudKit et identifiant d'équipe
-1. **Team ID** : https://developer.apple.com/account → section **Détails de l'abonnement** (*Membership details*) → **Identifiant d'équipe** (*Team ID*), 10 caractères (ex. `AB12CD34EF`). Notez-le.
-2. **Jeton** : https://icloud.developer.apple.com → en haut à droite, menu de votre compte (ou icône ☰) → **Settings** / **Tokens & Keys** → section **CloudKit Management Tokens** (*Manage Tokens*) → **+** → nom `Codemagic` → **Create** → **copiez** le jeton (affiché une seule fois).
-3. Codemagic → votre appli → onglet **Environment variables** :
-   - `CLOUDKIT_MANAGEMENT_TOKEN` = le jeton ; **Group** : `monvoyage_cloudkit` (création) ; cochez **Secret** → **Add** ;
-   - `CLOUDKIT_TEAM_ID` = votre Team ID ; **Group** : `monvoyage_cloudkit` → **Add**.
+### 6.1 Jeton de gestion CloudKit
+1. https://icloud.developer.apple.com → flèche **⌄** à côté de votre nom → **Settings** → **Tokens** → section **Management Tokens** → **+ Create Management Token** → nom `GitHub` → **Create** → **copiez** le jeton. (Pas « API Token » ni « User Token ».)
+2. Secret GitHub `CLOUDKIT_MANAGEMENT_TOKEN` = ce jeton.
+3. Variable GitHub (onglet **Variables**) `CLOUDKIT_TEAM_ID` = votre Team ID (`8B47T5AZDA`, visible dans l'adresse de la console CloudKit).
 
 ### 6.2 Importer le schéma
-1. Codemagic → **Start new build** → Branch `main` → Workflow **Schéma CloudKit → Development** → **Start new build** (2 à 5 min).
+1. Onglet **Actions** → **Schéma CloudKit → Development** → **Run workflow** → **Run workflow** (2 à 5 min).
 2. ✅ Toutes les étapes vertes. 🔁 Si une étape est rouge, envoyez à Claude Code son nom et ses dernières lignes.
 
 ### 6.3 Déployer en Production
@@ -237,7 +222,7 @@ Pour **arrêter le partage** (propriétaire) ou **quitter** (invité) : même é
 
 1. Ouvrez Claude Code sur ce projet et décrivez la modification (« ajoute… », « corrige… »).
 2. Claude Code modifie, puis **commit et push** sur `main`.
-3. Codemagic se lance tout seul : tests → build (numéro incrémenté automatiquement) → TestFlight.
+3. GitHub Actions se lance tout seul : tests → build (numéro incrémenté automatiquement) → TestFlight.
 4. Sur les iPhone : TestFlight → **Mettre à jour**. Les données restent (elles sont dans l'iPhone et dans iCloud).
 
 **Règle d'or des données** (rappelez-la à Claude Code si besoin) : dans le modèle Core Data, on **ajoute** uniquement des attributs optionnels ou avec valeur par défaut, dans une **nouvelle version** du modèle ; on ne **renomme** et on ne **supprime** jamais une entité ou un attribut déjà publiés. Après un changement de modèle : refaire les étapes 6.2 et 6.3 (workflow « Schéma CloudKit » puis déploiement).
@@ -249,7 +234,7 @@ Pensez à **exporter** vos voyages de temps en temps (liste des voyages → **+*
 ## 9. Dépannage
 
 ### Où trouver les logs
-**codemagic.io → Builds** → cliquez le build rouge → cliquez l'étape rouge pour la déplier → copiez les dernières lignes (ou bouton **Download logs** en haut à droite).
+**GitHub → onglet Actions** → cliquez le build rouge → cliquez l'étape rouge pour la déplier → copiez les dernières lignes. Le journal complet des tests est dans **Artifacts → journaux-build**.
 
 > 🔁 **Envoyez à Claude Code** : le **nom de l'étape** rouge + les **30 à 50 dernières lignes**. Pour les tests, joignez l'artefact `xcodebuild-test.log`.
 
@@ -260,7 +245,7 @@ Pensez à **exporter** vos voyages de temps en temps (liste des voyages → **+*
 | `No matching profiles found` / `doesn't include the com.apple.developer.icloud-container-identifiers entitlement` / `…application-groups…` | L'App ID n'a pas la capacité ou le conteneur/groupe n'est pas coché | Refaire l'étape 2.3 / 2.4, puis **supprimer les profils MonVoyage** dans *Profiles* et relancer le build |
 | `There are no certificates` / `maximum number of certificates` | Clé privée différente de celle de l'appli précédente, limite Apple atteinte | Réutiliser l'ancienne `CERTIFICATE_PRIVATE_KEY`, ou révoquer un certificat de distribution inutilisé dans *Certificates* |
 | `The bundle version must be higher than the previously uploaded version` | Numéro de build déjà utilisé | Vérifier `APP_STORE_APPLE_ID` (10 chiffres, celui de l'étape 3) ; relancer |
-| `Authentication failed` / `integration … not found` | Nom de clé API différent dans `codemagic.yaml` | Mettre exactement le nom saisi à l'étape 4.2 |
+| `Authentication failed` / `401` (App Store Connect) | Secret de clé API incorrect | Vérifier les 3 secrets `APP_STORE_CONNECT_*` (étape 4.1), le `.p8` copié en entier |
 | `** TEST FAILED **` | Un test unitaire échoue | Envoyer `xcodebuild-test.log` à Claude Code |
 | Dans l'appli : le partage échoue, rien ne se synchronise entre les iPhone | Schéma CloudKit pas déployé en Production | Refaire l'étape 6 (points 4 à 9) |
 | Workflow « Schéma CloudKit » : `authentication` / `401` | Jeton ou Team ID incorrect | Recréer le jeton (6.1) et vérifier `CLOUDKIT_TEAM_ID` |

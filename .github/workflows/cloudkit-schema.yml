@@ -1,0 +1,67 @@
+# Schéma CloudKit : à lancer À LA MAIN (onglet Actions), une fois au départ
+# puis après chaque changement du modèle Core Data.
+# Génère le schéma depuis le modèle et l'importe dans l'environnement Development.
+# Il reste ensuite à le déployer vers Production dans la console CloudKit
+# (« Deploy Schema Changes »).
+#
+# Réglages (Settings > Secrets and variables > Actions) :
+#   secret   CLOUDKIT_MANAGEMENT_TOKEN  jeton de gestion CloudKit
+#   variable CLOUDKIT_TEAM_ID           identifiant d'équipe Apple (10 caractères)
+
+name: Schéma CloudKit → Development
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  import-schema:
+    runs-on: xcode-27
+    timeout-minutes: 15
+    env:
+      ICLOUD_CONTAINER: iCloud.fr.tanguy.monvoyage
+      CLOUDKIT_TEAM_ID: ${{ vars.CLOUDKIT_TEAM_ID }}
+      CLOUDKIT_MANAGEMENT_TOKEN: ${{ secrets.CLOUDKIT_MANAGEMENT_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Vérifier les réglages
+        run: |
+          if [ -z "$CLOUDKIT_MANAGEMENT_TOKEN" ]; then echo "::error::Secret CLOUDKIT_MANAGEMENT_TOKEN manquant"; exit 1; fi
+          if [ -z "$CLOUDKIT_TEAM_ID" ]; then echo "::error::Variable CLOUDKIT_TEAM_ID manquante"; exit 1; fi
+
+      - name: Générer le schéma depuis le modèle Core Data
+        run: |
+          python3 scripts/make_cloudkit_schema.py build/cloudkit-schema.ckdb
+          cat build/cloudkit-schema.ckdb
+
+      - name: Sauvegarder le schéma actuel (Development)
+        run: |
+          xcrun cktool export-schema \
+            --team-id "$CLOUDKIT_TEAM_ID" \
+            --container-id "$ICLOUD_CONTAINER" \
+            --environment development \
+            --output-file build/schema-avant.ckdb
+          cat build/schema-avant.ckdb
+
+      - name: Valider puis importer dans Development
+        run: |
+          xcrun cktool import-schema \
+            --team-id "$CLOUDKIT_TEAM_ID" \
+            --container-id "$ICLOUD_CONTAINER" \
+            --environment development \
+            --validate \
+            --file build/cloudkit-schema.ckdb
+          xcrun cktool export-schema \
+            --team-id "$CLOUDKIT_TEAM_ID" \
+            --container-id "$ICLOUD_CONTAINER" \
+            --environment development \
+            --output-file build/schema-apres.ckdb
+          echo "Import terminé. Déployez maintenant vers Production dans la console CloudKit."
+
+      - name: Conserver les schémas
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: schemas-cloudkit
+          path: build/*.ckdb
+          if-no-files-found: ignore

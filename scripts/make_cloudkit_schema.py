@@ -11,7 +11,7 @@ selon la correspondance utilisée par NSPersistentCloudKitContainer :
   + CD_a_ckAsset (ASSET) pour les textes et données binaires (valeurs volumineuses)
 
 Pourquoi : les builds TestFlight utilisent toujours l'environnement Production ;
-le schéma ne peut donc pas être créé depuis l'appli. Codemagic importe ce fichier
+le schéma ne peut donc pas être créé depuis l'appli. GitHub Actions importe ce fichier
 dans l'environnement Development avec `xcrun cktool import-schema`, puis on le
 déploie vers Production depuis la console CloudKit.
 

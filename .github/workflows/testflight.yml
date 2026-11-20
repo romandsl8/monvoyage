@@ -1,0 +1,136 @@
+# =====================================================================
+#  MonVoyage → TestFlight (GitHub Actions)
+#  Génère le projet (XcodeGen), lance les tests, signe, incrémente le
+#  numéro de build et envoie sur TestFlight.
+#
+#  Machine : image « xcode-27 » (Xcode 27.2 = SDK iOS 27, nécessaire pour
+#  l'iPhone Duo et exigé par Apple à partir d'avril 2027).
+#
+#  Secrets (Settings > Secrets and variables > Actions > Secrets) :
+#    APP_STORE_CONNECT_ISSUER_ID       Issuer ID de la clé API App Store Connect
+#    APP_STORE_CONNECT_KEY_IDENTIFIER  Key ID de la clé API
+#    APP_STORE_CONNECT_PRIVATE_KEY     contenu complet du fichier AuthKey_XXXX.p8
+#    CERTIFICATE_PRIVATE_KEY           clé privée RSA du certificat de distribution
+#
+#  Les identifiants ci-dessous doivent rester identiques à ceux de project.yml.
+# =====================================================================
+
+name: MonVoyage → TestFlight
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "**.md"
+      - "design/**"
+      - "scripts/fetch_affluence.py"
+      - ".github/workflows/affluence.yml"
+      - ".github/workflows/cloudkit-schema.yml"
+  workflow_dispatch: {}
+
+concurrency:
+  group: testflight
+  cancel-in-progress: true
+
+env:
+  APP_BUNDLE_ID: fr.tanguy.monvoyage
+  WIDGET_BUNDLE_ID: fr.tanguy.monvoyage.widget
+  APP_STORE_APPLE_ID: "6837239666"
+  XCODE_VERSION: "27.2"
+  XCODE_PROJECT: MonVoyage.xcodeproj
+  XCODE_SCHEME: MonVoyage
+
+jobs:
+  testflight:
+    runs-on: xcode-27
+    timeout-minutes: 75
+    env:
+      APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+      APP_STORE_CONNECT_KEY_IDENTIFIER: ${{ secrets.APP_STORE_CONNECT_KEY_IDENTIFIER }}
+      APP_STORE_CONNECT_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
+      CERTIFICATE_PRIVATE_KEY: ${{ secrets.CERTIFICATE_PRIVATE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Vérifier les secrets
+        run: |
+          missing=0
+          for name in APP_STORE_CONNECT_ISSUER_ID APP_STORE_CONNECT_KEY_IDENTIFIER APP_STORE_CONNECT_PRIVATE_KEY CERTIFICATE_PRIVATE_KEY; do
+            if [ -z "${!name}" ]; then echo "::error::Secret $name manquant"; missing=1; fi
+          done
+          exit $missing
+
+      - name: Choisir Xcode ${{ env.XCODE_VERSION }}
+        run: |
+          sudo xcode-select -s "/Applications/Xcode_${XCODE_VERSION}.app"
+          xcodebuild -version
+
+      - name: Installer XcodeGen et les outils de signature
+        run: |
+          brew install xcodegen
+          pipx install codemagic-cli-tools
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Générer le projet Xcode
+        run: xcodegen generate
+
+      - name: Tests unitaires (le build échoue si un test échoue)
+        run: |
+          set -o pipefail
+          mkdir -p build
+          SIM_ID=$(xcrun simctl list devices available -j | python3 -c '
+          import json, sys
+          data = json.load(sys.stdin)["devices"]
+          runtimes = sorted(k for k in data if "iOS" in k)
+          for runtime in reversed(runtimes):
+              phones = [d for d in data[runtime] if d["name"].startswith("iPhone")]
+              if phones:
+                  print(phones[0]["udid"]); break
+          ')
+          echo "Simulateur : $SIM_ID"
+          xcodebuild test \
+            -project "$XCODE_PROJECT" \
+            -scheme "$XCODE_SCHEME" \
+            -destination "id=$SIM_ID" \
+            CODE_SIGNING_ALLOWED=NO \
+            > build/xcodebuild-test.log 2>&1 || true
+          grep -E "error:|Test Case .* failed|\*\* TEST" build/xcodebuild-test.log | tail -60 || true
+          grep -q "\*\* TEST SUCCEEDED \*\*" build/xcodebuild-test.log
+
+      - name: Signature (profils App Store pour l'appli et le widget)
+        run: |
+          app-store-connect fetch-signing-files "$APP_BUNDLE_ID" --type IOS_APP_STORE --create
+          app-store-connect fetch-signing-files "$WIDGET_BUNDLE_ID" --type IOS_APP_STORE --create
+          keychain initialize
+          keychain add-certificates
+          xcode-project use-profiles
+
+      - name: Numéro de build = dernier build TestFlight + 1
+        run: |
+          LATEST=$(app-store-connect get-latest-testflight-build-number "$APP_STORE_APPLE_ID" 2>/dev/null || echo 0)
+          if ! [[ "$LATEST" =~ ^[0-9]+$ ]]; then LATEST=0; fi
+          NEW=$((LATEST + 1))
+          echo "Dernier build TestFlight : $LATEST → nouveau build : $NEW"
+          agvtool new-version -all "$NEW"
+
+      - name: Compiler l'IPA
+        run: |
+          xcode-project build-ipa --project "$XCODE_PROJECT" --scheme "$XCODE_SCHEME"
+
+      - name: Envoyer sur TestFlight
+        run: |
+          app-store-connect publish --path "build/ios/ipa/*.ipa"
+
+      - name: Restaurer le trousseau
+        if: always()
+        run: keychain use-login || true
+
+      - name: Conserver les journaux
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: journaux-build
+          path: |
+            build/xcodebuild-test.log
+            /tmp/xcodebuild_logs/*.log
+          if-no-files-found: ignore

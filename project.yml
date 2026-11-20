@@ -1,10 +1,10 @@
 # =====================================================================
 #  MonVoyage — projet XcodeGen
-#  Le fichier .xcodeproj n'est PAS versionné : Codemagic le génère avec
+#  Le fichier .xcodeproj n'est PAS versionné : GitHub Actions le génère avec
 #  « xcodegen generate ».
 # =====================================================================
 #
-#  >>> IDENTIFIANTS : tout se change ICI (et dans codemagic.yaml) <<<
+#  >>> IDENTIFIANTS : tout se change ICI (et dans .github/workflows/testflight.yml) <<<
 #
 #  APP_DISPLAY_NAME   nom affiché sous l'icône
 #  APP_BUNDLE_ID      bundle ID de l'appli
@@ -12,9 +12,9 @@
 #  ICLOUD_CONTAINER   conteneur iCloud (CloudKit)
 #  APP_GROUP_ID       App Group partagé appli <-> widget
 #  CLOUDKIT_ENV       Production (les builds TestFlight utilisent toujours Production ;
-#                     le schéma est créé par le workflow Codemagic « cloudkit-schema »)
+#                     le schéma est créé par le workflow GitHub « Schéma CloudKit »)
 #  MARKETING_VERSION  version affichée (1.0, 1.1…). Le numéro de build est
-#                     calculé automatiquement par Codemagic.
+#                     calculé automatiquement par GitHub Actions.
 # =====================================================================
 
 name: MonVoyage

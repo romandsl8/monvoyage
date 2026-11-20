@@ -5,7 +5,7 @@ budget et échéancier, calculateur taxes/pourboire, checklists, planning jour p
 réservations et vols, vue « Aujourd'hui », widgets, Live Activity, Siri, scan de tickets — le tout **hors ligne**
 et **partagé entre deux comptes iCloud**.
 
-> Pas de Mac nécessaire : le code est sur GitHub, **Codemagic** génère le projet, lance les tests, signe et envoie sur
+> Pas de Mac nécessaire : le code est sur GitHub, **GitHub Actions** (machine Mac, Xcode 27.2) génère le projet, lance les tests, signe et envoie sur
 > **TestFlight**. Le pas à pas complet est dans [GUIDE_MISE_EN_PLACE.md](GUIDE_MISE_EN_PLACE.md).
 
 ---
@@ -35,8 +35,7 @@ horaires des parcs via [ThemeParks.wiki](https://themeparks.wiki).
 
 ```
 project.yml                  Projet XcodeGen (identifiants centralisés en haut)
-codemagic.yaml               CI/CD : génération, tests, signature, build, TestFlight
-.github/workflows/           affluence.yml (publication quotidienne de affluence.json)
+.github/workflows/          testflight.yml (tests, signature, TestFlight), cloudkit-schema.yml (schéma iCloud), affluence.yml (affluence quotidienne)
 scripts/                     fetch_affluence.py, make_icon.py
 design/icon.svg              Source vectorielle de l'icône
 MonVoyage/
@@ -71,7 +70,7 @@ MonVoyageTests/              Tests unitaires
    - créer une **nouvelle version** du modèle (`MonVoyage 2.xcdatamodel`) et la déclarer courante dans `.xccurrentversion` ;
    - **ajouter uniquement** des attributs optionnels ou avec valeur par défaut, ou de nouvelles entités ;
    - **ne jamais renommer ni supprimer** une entité, un attribut ou une relation déjà publiés ;
-   - avant de publier la version, relancer le workflow Codemagic **« Schéma CloudKit → Development »** puis **déployer** le schéma vers Production dans la console CloudKit.
+   - avant de publier la version, relancer le workflow GitHub **« Schéma CloudKit → Development »** puis **déployer** le schéma vers Production dans la console CloudKit.
 5. Export / import `.zip` (JSON + pièces jointes) d'un voyage ou de tous, via la feuille de partage. L'import recrée à l'identique avec de nouveaux UUID. Rappel discret après 30 jours sans export.
 
 ---
@@ -86,7 +85,7 @@ Procédure sans Mac :
 1. `scripts/make_cloudkit_schema.py` génère le schéma (`.ckdb`) à partir de la version courante du modèle Core Data,
    selon la correspondance de `NSPersistentCloudKitContainer` (`CD_<Entité>`, `CD_<attribut>`, relations to-one en `STRING`,
    `CD_entityName`, `CD_moveReceipt`, `CD_<attribut>_ckAsset`).
-2. Le workflow Codemagic **« Schéma CloudKit → Development »** (lancé à la main) l'importe avec `xcrun cktool import-schema`
+2. Le workflow GitHub **« Schéma CloudKit → Development »** (lancé à la main) l'importe avec `xcrun cktool import-schema`
    dans l'environnement Development, grâce à un jeton de gestion CloudKit (`CLOUDKIT_MANAGEMENT_TOKEN`).
 3. [Console CloudKit](https://icloud.developer.apple.com) → *Deploy Schema Changes* vers Production.
 
@@ -128,11 +127,11 @@ python3 scripts/make_icon.py
 `MonVoyageTests` couvre : conversion de devises, taxes et pourboire (50 $ + 6,5 % + 20 %), répartition du solde avec arrondi,
 échéancier 1 200 € (300 € + 3 × 300 €) et baisse du reste à payer, statuts des versements, budget restant par jour,
 durée de vol avec fuseaux (été/hiver), lecture du total d'un ticket, choix prévision/normales, limite des 64 notifications,
-ZIP, et export → import aller-retour. Codemagic échoue si un test échoue.
+ZIP, et export → import aller-retour. Le build GitHub échoue si un test échoue.
 
 ---
 
 ## Mettre à jour l'appli
 
-Demandez la modification à Claude Code, poussez sur `main` : Codemagic teste, incrémente le numéro de build et livre sur TestFlight.
+Demandez la modification à Claude Code, poussez sur `main` : GitHub Actions teste, incrémente le numéro de build et livre sur TestFlight.
 Respectez la règle de migration ci-dessus pour toute modification du modèle de données.

@@ -1,4 +1,4 @@
-# Projet Xcode généré par XcodeGen (Codemagic)
+# Projet Xcode généré par XcodeGen (CI)
 *.xcodeproj/
 *.xcworkspace/
 Config/
