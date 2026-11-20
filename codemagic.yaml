@@ -34,7 +34,7 @@ workflows:
         WIDGET_BUNDLE_ID: fr.tanguy.monvoyage.widget
         ICLOUD_CONTAINER: iCloud.fr.tanguy.monvoyage
         APP_GROUP_ID: group.fr.tanguy.monvoyage
-        APP_STORE_APPLE_ID: "0000000000"      # ← à remplacer
+        APP_STORE_APPLE_ID: "6837239666"
         CLOUDKIT_ENV: Development             # ← Production après déploiement du schéma
         XCODE_PROJECT: MonVoyage.xcodeproj
         XCODE_SCHEME: MonVoyage
