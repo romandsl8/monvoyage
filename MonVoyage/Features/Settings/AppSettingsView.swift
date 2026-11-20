@@ -1,4 +1,5 @@
 import SwiftUI
+import CloudKit
 
 /// Réglages de l'appli : taux forcé, affluence, rappels, tables aéroports / compagnies, version.
 struct AppSettingsView: View {
@@ -122,8 +123,9 @@ struct AppSettingsView: View {
 struct CloudKitDebugView: View {
     @State private var message: String?
     @State private var running = false
+    @State private var accountStatus = "…"
 
-    private var environment: String {
+    private var compilation: String {
         #if DEBUG
         return "Debug"
         #else
@@ -131,32 +133,92 @@ struct CloudKitDebugView: View {
         #endif
     }
 
+    private var cloudKitEnvironment: String {
+        (Bundle.main.object(forInfoDictionaryKey: "CloudKitEnvironment") as? String) ?? "inconnu"
+    }
+
     var body: some View {
         Form {
-            Section {
+            Section("Diagnostic") {
                 LabeledContent("Conteneur", value: PersistenceController.cloudKitContainerID)
-                LabeledContent("Compilation", value: environment)
+                LabeledContent("Environnement CloudKit", value: cloudKitEnvironment)
+                LabeledContent("Compilation", value: compilation)
+                LabeledContent("Compte iCloud", value: accountStatus)
+                LabeledContent("Magasin privé", value: PersistenceController.shared.privateStore == nil ? "non chargé" : "chargé")
+                LabeledContent("Magasin partagé", value: PersistenceController.shared.sharedStore == nil ? "non chargé" : "chargé")
             }
             Section {
                 Button {
                     running = true
-                    do {
-                        try PersistenceController.shared.initializeCloudKitSchema()
-                        message = "Schéma envoyé dans l'environnement Development. Déployez-le maintenant vers Production dans la console CloudKit."
-                    } catch {
-                        message = "Échec : \(error.localizedDescription)\n\nCe bouton ne fonctionne que sur un build compilé avec CLOUDKIT_ENV = Development."
+                    message = nil
+                    let controller = PersistenceController.shared
+                    DispatchQueue.global(qos: .userInitiated).async {
+                        var result: String
+                        do {
+                            try controller.initializeCloudKitSchema()
+                            result = "✅ Schéma envoyé dans l'environnement Development. Déployez-le maintenant vers Production dans la console CloudKit."
+                        } catch {
+                            result = "Échec.\n\n" + CloudKitErrorReport.describe(error)
+                        }
+                        DispatchQueue.main.async {
+                            message = result
+                            running = false
+                        }
                     }
-                    running = false
                 } label: {
                     HStack { Text("Initialiser le schéma CloudKit"); if running { Spacer(); ProgressView() } }
                 }
+                .disabled(running)
             } footer: {
-                Text("À faire une seule fois, sur le premier build TestFlight compilé en Development, avec un compte iCloud connecté. L'opération peut prendre une minute.")
+                Text("À faire une seule fois, sur un build compilé avec CLOUDKIT_ENV = Development, avec un compte iCloud connecté. L'opération peut prendre une minute.")
             }
             if let message {
-                Section { Text(message).font(.footnote).textSelection(.enabled) }
+                Section {
+                    Text(message).font(.footnote.monospaced()).textSelection(.enabled)
+                    Button { UIPasteboard.general.string = message } label: { Label("Copier le message", systemImage: "doc.on.doc") }
+                }
             }
         }
         .navigationTitle("CloudKit")
+        .task { accountStatus = await CloudKitErrorReport.accountStatus() }
+    }
+}
+
+/// Description détaillée d'une erreur Core Data / CloudKit (pour le dépannage).
+enum CloudKitErrorReport {
+    static func describe(_ error: Error, depth: Int = 0) -> String {
+        let ns = error as NSError
+        let indent = String(repeating: "  ", count: depth)
+        var lines = ["\(indent)\(ns.domain) \(ns.code) : \(ns.localizedDescription)"]
+        for (key, value) in ns.userInfo where key != NSUnderlyingErrorKey && key != CKPartialErrorsByItemIDKey {
+            let text = String(describing: value)
+            lines.append("\(indent)  \(key) = \(text.prefix(600))")
+        }
+        if let partial = ns.userInfo[CKPartialErrorsByItemIDKey] as? [AnyHashable: Error] {
+            for (item, sub) in partial.prefix(5) {
+                lines.append("\(indent)  élément \(item) :")
+                lines.append(describe(sub, depth: depth + 2))
+            }
+        }
+        if let underlying = ns.userInfo[NSUnderlyingErrorKey] as? Error, depth < 4 {
+            lines.append(describe(underlying, depth: depth + 1))
+        }
+        return lines.joined(separator: "\n")
+    }
+
+    static func accountStatus() async -> String {
+        do {
+            let status = try await CKContainer(identifier: PersistenceController.cloudKitContainerID).accountStatus()
+            switch status {
+            case .available: return "connecté"
+            case .noAccount: return "aucun compte"
+            case .restricted: return "restreint"
+            case .temporarilyUnavailable: return "temporairement indisponible"
+            case .couldNotDetermine: return "indéterminé"
+            @unknown default: return "inconnu"
+            }
+        } catch {
+            return "erreur : \(error.localizedDescription)"
+        }
     }
 }

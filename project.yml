@@ -102,6 +102,7 @@ targets:
         NSPhotoLibraryUsageDescription: "MonVoyage accède à vos photos pour joindre un ticket ou un document à une dépense ou une réservation."
         AppGroupID: $(APP_GROUP_ID)
         CloudKitContainerID: $(ICLOUD_CONTAINER)
+        CloudKitEnvironment: $(CLOUDKIT_ENV)
         CFBundleURLTypes:
           - CFBundleURLName: $(APP_BUNDLE_ID)
             CFBundleURLSchemes: [monvoyage]
