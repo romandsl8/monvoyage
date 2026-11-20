@@ -26,7 +26,7 @@ workflows:
       app_store_connect: ASC
 
     environment:
-      xcode: latest
+      xcode: "27.2"   # SDK iOS 27 : écrans de l'iPhone Duo + exigence Apple d'avril 2027 (« latest » reste en 26.x)
       groups:
         - monvoyage_signing          # CERTIFICATE_PRIVATE_KEY
       vars:
