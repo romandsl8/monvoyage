@@ -103,21 +103,62 @@ final class QueueTimesService: ObservableObject {
             let rides = try await fetchRides(parkID: parkID)
             var waits: [Int64: Int] = [:]
             var open: [Int64: Bool] = [:]
-            for (_, ride) in rides {
+            var live: [LiveRide] = []
+            for (area, ride) in rides {
                 waits[ride.id] = ride.wait_time ?? 0
                 open[ride.id] = ride.is_open ?? false
+                live.append(LiveRide(id: ride.id, parkID: parkID, name: ride.name, land: area,
+                                     wait: ride.wait_time ?? 0, isOpen: ride.is_open ?? false, lastUpdated: ride.last_updated))
             }
             let cache = WaitTimesCache(updatedAt: Date(), rides: waits, open: open)
             waitTimes[parkID] = cache
             CacheStore.save(cache, name: "waits-\(parkID).json")
+            let board = LiveParkWaits(updatedAt: Date(), rides: live)
+            liveRides[parkID] = board
+            CacheStore.save(board, name: "live-\(parkID).json")
             lastError = nil
         } catch {
             lastError = error.localizedDescription
             if waitTimes[parkID] == nil, let cached = CacheStore.load(WaitTimesCache.self, name: "waits-\(parkID).json") {
                 waitTimes[parkID] = cached
             }
+            if liveRides[parkID] == nil, let cached = CacheStore.load(LiveParkWaits.self, name: "live-\(parkID).json") {
+                liveRides[parkID] = cached
+            }
         }
     }
+
+    /// Toutes les attractions en direct d'un parc (dernier relevé connu).
+    @Published private(set) var liveRides: [Int64: LiveParkWaits] = [:]
+
+    func cachedLive(parkID: Int64) -> LiveParkWaits? {
+        liveRides[parkID] ?? CacheStore.load(LiveParkWaits.self, name: "live-\(parkID).json")
+    }
+
+    /// Rafraîchit plusieurs parcs en parallèle.
+    func refreshWaits(parkIDs: [Int64]) async {
+        await withTaskGroup(of: Void.self) { group in
+            for id in Set(parkIDs) where id > 0 {
+                group.addTask { await self.refreshWaits(parkID: id) }
+            }
+        }
+    }
+}
+
+/// Une attraction et son temps d'attente en direct (Queue-Times).
+struct LiveRide: Codable, Identifiable, Hashable {
+    let id: Int64
+    let parkID: Int64
+    let name: String
+    let land: String
+    let wait: Int
+    let isOpen: Bool
+    let lastUpdated: String?
+}
+
+struct LiveParkWaits: Codable {
+    var updatedAt: Date
+    var rides: [LiveRide]
 }
 
 // MARK: - Affluence (fichier affluence.json publié par GitHub Actions)

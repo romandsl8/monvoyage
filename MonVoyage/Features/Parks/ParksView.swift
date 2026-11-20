@@ -1,8 +1,36 @@
 import SwiftUI
 import CoreData
 
-/// Parcs, affluence (saisie manuelle possible) et attractions à faire.
+/// Onglet Parcs : temps d'attente en direct (tous les parcs) ou ma liste par parc.
 struct ParksView: View {
+    @ObservedObject var trip: Trip
+    @SceneStorage("parks.mode") private var mode = "waits"
+
+    var body: some View {
+        Group {
+            if mode == "waits" {
+                WaitTimesBoard(trip: trip)
+            } else {
+                ParksListView(trip: trip)
+            }
+        }
+        .navigationTitle("Parcs et attractions")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                Picker("Affichage", selection: $mode) {
+                    Text("Temps d'attente").tag("waits")
+                    Text("Ma liste").tag("list")
+                }
+                .pickerStyle(.segmented)
+                .frame(maxWidth: 320)
+            }
+        }
+    }
+}
+
+/// Parcs du voyage, affluence (saisie manuelle possible) et attractions à faire.
+struct ParksListView: View {
     @ObservedObject var trip: Trip
     @Environment(\.managedObjectContext) private var context
     @EnvironmentObject private var queueTimes: QueueTimesService
@@ -40,7 +68,6 @@ struct ParksView: View {
             }
             Section { QueueTimesCredit() }
         }
-        .navigationTitle("Parcs")
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button { showAddPark = true } label: { Label("Ajouter un parc", systemImage: "plus") }
@@ -116,7 +143,6 @@ struct ParkDetailView: View {
     @State private var showManualCrowd = false
     @State private var doneTick = 0
 
-    private var isParkDayToday: Bool { trip.parks(on: DayKey.key(Date())).contains(park) }
     private var waits: WaitTimesCache? { queueTimes.waitTimes[park.queueTimesID] ?? queueTimes.cachedWaits(parkID: park.queueTimesID) }
 
     var body: some View {
@@ -136,7 +162,7 @@ struct ParkDetailView: View {
                 Section(group.title) {
                     ForEach(group.items, id: \.objectID) { attraction in
                         AttractionRow(attraction: attraction, wait: waits?.rides[attraction.queueTimesID], isOpen: waits?.open[attraction.queueTimesID],
-                                      showWait: isParkDayToday || waits != nil) {
+                                      showWait: waits != nil) {
                             doneTick += 1
                         }
                         .contentShape(.rect)
@@ -177,7 +203,13 @@ struct ParkDetailView: View {
         .navigationTitle(park.wName)
         .toolbar { EditButton() }
         .refreshable { await refreshWaits() }
-        .task { await refreshWaits() }
+        .task {
+            // Temps réel : actualisation toutes les minutes tant que l'écran est affiché.
+            while !Task.isCancelled {
+                await refreshWaits()
+                try? await Task.sleep(nanoseconds: WaitTimesBoard.refreshSeconds * 1_000_000_000)
+            }
+        }
         .sheet(item: $editingAttraction) { attraction in AttractionEditorView(attraction: attraction, trip: trip) }
         .sheet(isPresented: $showManualCrowd) { ManualCrowdView(park: park, trip: trip) }
         .sensoryFeedback(.success, trigger: doneTick)
