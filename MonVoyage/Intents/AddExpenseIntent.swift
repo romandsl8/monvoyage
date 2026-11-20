@@ -108,7 +108,7 @@ struct MonVoyageShortcuts: AppShortcutsProvider {
                 "Ajoute une dépense dans \(.applicationName)",
                 "Ajoute une dépense en \(\.$category) dans \(.applicationName)",
                 "Nouvelle dépense \(.applicationName)",
-                "Ajoute des \(\.$currency) en \(\.$category) dans \(.applicationName)"
+                "Ajoute des \(\.$currency) dans \(.applicationName)"
             ],
             shortTitle: "Ajouter une dépense",
             systemImageName: "eurosign.circle.fill"
