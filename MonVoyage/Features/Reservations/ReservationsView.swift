@@ -82,6 +82,8 @@ struct ReservationsView: View {
             }
         }
         .navigationTitle("Réservations")
+        .scrollContentBackground(.hidden)
+        .groupedBackground()
         .confirmationDialog("Supprimer cette dépense ?",
                             isPresented: Binding(get: { expenseToDelete != nil }, set: { if !$0 { expenseToDelete = nil } }),
                             titleVisibility: .visible) {
@@ -112,7 +114,7 @@ struct ReservationRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            Image(systemName: reservation.kind.symbol).foregroundStyle(Color.accentColor).frame(width: 28)
+            IconBubble(symbol: reservation.kind.symbol, tint: .accentColor, size: 38)
             VStack(alignment: .leading, spacing: 2) {
                 Text(reservation.wTitle)
                 if let first = reservation.segmentList.first, let dep = first.departureDate {
@@ -186,6 +188,8 @@ struct ReservationDetailView: View {
             }
         }
         .navigationTitle(reservation.wTitle)
+        .scrollContentBackground(.hidden)
+        .groupedBackground()
         .quickLookPreview($previewURL)
         .sensoryFeedback(.success, trigger: copied)
     }

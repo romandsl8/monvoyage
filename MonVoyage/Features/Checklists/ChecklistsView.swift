@@ -21,7 +21,7 @@ struct ChecklistsView: View {
                     ChecklistDetailView(checklist: list, trip: trip)
                 } label: {
                     HStack {
-                        Image(systemName: list.symbol ?? "checklist").foregroundStyle(trip.accent).frame(width: 28)
+                        IconBubble(symbol: list.symbol ?? "checklist", tint: trip.accent, size: 38)
                         VStack(alignment: .leading, spacing: 4) {
                             Text(list.wTitle)
                             ProgressBar(fraction: list.itemList.isEmpty ? 0 : Double(list.doneCount) / Double(list.itemList.count), tint: trip.accent)
@@ -43,6 +43,8 @@ struct ChecklistsView: View {
             }
         }
         .navigationTitle("Checklists")
+        .scrollContentBackground(.hidden)
+        .groupedBackground()
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button { showNew = true } label: { Label("Nouvelle liste", systemImage: "plus") }
@@ -100,6 +102,8 @@ struct ChecklistDetailView: View {
             }
         }
         .navigationTitle(checklist.wTitle)
+        .scrollContentBackground(.hidden)
+        .groupedBackground()
         .toolbar { EditButton() }
         .sensoryFeedback(.success, trigger: checkTick)
     }

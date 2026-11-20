@@ -76,10 +76,14 @@ struct TripRootView: View {
                         Button {
                             nav.open(module)
                         } label: {
-                            Label(module.title, systemImage: module.symbol)
-                                .foregroundStyle(selected ? Color.white : Color.primary)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .contentShape(.rect)
+                            HStack(spacing: 12) {
+                                IconBubble(symbol: module.symbol, tint: selected ? .white : module.color, size: 32)
+                                Text(module.title).font(.body.weight(selected ? .semibold : .regular))
+                            }
+                            .foregroundStyle(selected ? Color.white : Color.primary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.vertical, 2)
+                            .contentShape(.rect)
                         }
                         .buttonStyle(.plain)
                         .listRowBackground(
@@ -181,13 +185,28 @@ struct MoreMenuView: View {
     @ObservedObject var trip: Trip
 
     var body: some View {
-        List {
-            ForEach(TripModule.secondary) { module in
-                NavigationLink(value: module) {
-                    Label(module.title, systemImage: module.symbol)
+        ScrollView {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 160), spacing: 12)], spacing: 12) {
+                ForEach(TripModule.secondary) { module in
+                    NavigationLink(value: module) {
+                        VStack(alignment: .leading, spacing: 10) {
+                            IconBubble(symbol: module.symbol, tint: module.color, size: 42)
+                            Text(module.title).font(.headline).fontDesign(.rounded).foregroundStyle(.primary)
+                                .lineLimit(2).multilineTextAlignment(.leading)
+                            Text(module.subtitle).font(.caption).foregroundStyle(.secondary)
+                                .lineLimit(2).multilineTextAlignment(.leading)
+                        }
+                        .frame(maxWidth: .infinity, minHeight: 128, alignment: .topLeading)
+                        .padding(14)
+                        .background(Color(.secondarySystemGroupedBackground), in: .rect(cornerRadius: Theme.cardRadius, style: .continuous))
+                        .shadow(color: .black.opacity(0.05), radius: 10, x: 0, y: 3)
+                    }
+                    .buttonStyle(.plain)
                 }
             }
+            .padding()
         }
+        .groupedBackground()
         .navigationTitle(trip.wName)
     }
 }

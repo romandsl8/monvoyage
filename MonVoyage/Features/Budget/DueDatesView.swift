@@ -109,6 +109,8 @@ struct DueDatesView: View {
             }
         }
         .navigationTitle("Échéances")
+        .scrollContentBackground(.hidden)
+        .groupedBackground()
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Toggle(isOn: $showPaid) { Label("Afficher les payés", systemImage: "checkmark.circle") }

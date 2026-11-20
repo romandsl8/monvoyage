@@ -49,35 +49,58 @@ struct TodayView: View {
 
     @ViewBuilder
     private func header(now: Date) -> some View {
-        Card {
-            HStack(alignment: .center) {
-                VStack(alignment: .leading, spacing: 4) {
-                    if trip.isOngoing(now: now) {
-                        Text(Fmt.longDay(now, timeZone: trip.tripTimeZone).capitalized).font(.title2.bold()).fontDesign(.rounded)
-                    } else if let start = trip.startDate {
-                        // Avant (ou après) le voyage : on affiche les dates du voyage, pas celle du jour.
-                        Text(Fmt.longDay(start).capitalized).font(.title2.bold()).fontDesign(.rounded)
-                        if let end = trip.endDate, DayKey.key(end) != DayKey.key(start) {
-                            Text("au \(Fmt.longDay(end)) · \(trip.dayKeys.count) jours").font(.subheadline).foregroundStyle(.secondary)
+        VStack(spacing: 12) {
+            HeroCard(tint: trip.accent) {
+                HStack(alignment: .top) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        if let city = trip.city, !city.isEmpty {
+                            Label(city, systemImage: "mappin.and.ellipse")
+                                .font(.subheadline.weight(.semibold))
+                                .opacity(0.9)
+                        }
+                        if trip.isOngoing(now: now) {
+                            Text(Fmt.longDay(now, timeZone: trip.tripTimeZone).capitalized)
+                                .font(.title.bold()).fontDesign(.rounded)
+                        } else if let start = trip.startDate {
+                            // Avant (ou après) le voyage : les dates du voyage, pas celle du jour.
+                            Text(Fmt.longDay(start).capitalized)
+                                .font(.title.bold()).fontDesign(.rounded)
+                                .minimumScaleFactor(0.7).lineLimit(1)
+                            if let end = trip.endDate, DayKey.key(end) != DayKey.key(start) {
+                                Text("au \(Fmt.longDay(end)) · \(trip.dayKeys.count) jours")
+                                    .font(.subheadline).opacity(0.9)
+                            }
                         }
                     }
-                    if let city = trip.city { Text(city).foregroundStyle(.secondary) }
-                }
-                Spacer()
-                if !trip.isOngoing(now: now), let days = trip.daysUntilDeparture(now: now), days >= 0 {
-                    VStack {
-                        Text("J-\(days)").font(.system(size: 40, weight: .bold, design: .rounded)).foregroundStyle(trip.accent)
-                        Text("avant le départ").font(.caption).foregroundStyle(.secondary)
+                    Spacer(minLength: 8)
+                    if !trip.isOngoing(now: now), let days = trip.daysUntilDeparture(now: now), days >= 0 {
+                        VStack(spacing: 0) {
+                            Text("J-\(days)").font(.system(size: 44, weight: .heavy, design: .rounded)).monospacedDigit()
+                                .minimumScaleFactor(0.6).lineLimit(1)
+                            Text("avant le départ").font(.caption.weight(.semibold)).opacity(0.9)
+                        }
+                        .padding(.horizontal, 14).padding(.vertical, 8)
+                        .background(.white.opacity(0.18), in: .rect(cornerRadius: 18, style: .continuous))
+                        .accessibilityElement(children: .combine)
+                    } else if trip.isOngoing(now: now), let index = trip.dayKeys.firstIndex(of: DayKey.key(now)) {
+                        VStack(spacing: 0) {
+                            Text("Jour \(index + 1)").font(.title2.weight(.heavy)).fontDesign(.rounded)
+                            Text("sur \(trip.dayKeys.count)").font(.caption.weight(.semibold)).opacity(0.9)
+                        }
+                        .padding(.horizontal, 14).padding(.vertical, 8)
+                        .background(.white.opacity(0.18), in: .rect(cornerRadius: 18, style: .continuous))
                     }
-                    .accessibilityElement(children: .combine)
-                } else if trip.isOngoing(now: now), let index = trip.dayKeys.firstIndex(of: DayKey.key(now)) {
-                    GlassChip(text: "Jour \(index + 1)/\(trip.dayKeys.count)", symbol: "calendar", tint: trip.accent)
                 }
             }
             let alerts = DocumentAlerts.allAlerts(trip: trip)
             if !alerts.isEmpty && !trip.isFinished(now: now) {
-                ForEach(alerts, id: \.self) { alert in
-                    Label(alert, systemImage: "exclamationmark.triangle.fill").font(.caption).foregroundStyle(.orange)
+                Card {
+                    CardTitle(title: "À vérifier", symbol: "exclamationmark.triangle.fill", tint: .orange)
+                    ForEach(alerts, id: \.self) { alert in
+                        Text(alert).font(.subheadline).foregroundStyle(.secondary)
+                    }
+                    Button { nav.open(.tripSettings) } label: { Label("Passeports et ESTA", systemImage: "person.text.rectangle") }
+                        .buttonStyle(.glass).font(.caption)
                 }
             }
         }

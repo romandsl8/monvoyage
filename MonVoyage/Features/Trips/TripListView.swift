@@ -151,51 +151,80 @@ struct TripCardView: View {
 
     var body: some View {
         let summary = BudgetSummary(trip: trip)
-        Card {
+        VStack(alignment: .leading, spacing: 0) {
+            // Bandeau en dégradé : nom, destination, compte à rebours.
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(trip.wName).font(.title3.bold()).fontDesign(.rounded)
+                    Text(trip.wName).font(.title2.bold()).fontDesign(.rounded).lineLimit(1).minimumScaleFactor(0.7)
                     if let city = trip.city, !city.isEmpty {
-                        Label(city, systemImage: "mappin.and.ellipse").font(.subheadline).foregroundStyle(.secondary)
-                    }
-                    if let start = trip.startDate, let end = trip.endDate {
-                        Text("\(Fmt.day(start)) → \(Fmt.day(end))").font(.subheadline).foregroundStyle(.secondary)
+                        Label(city, systemImage: "mappin.and.ellipse").font(.subheadline.weight(.medium)).opacity(0.9)
                     }
                 }
-                Spacer()
+                Spacer(minLength: 8)
                 countdown
             }
-            if summary.budgetEUR > 0 {
-                VStack(alignment: .leading, spacing: 4) {
-                    ProgressBar(fraction: summary.consumedFraction, tint: trip.accent)
-                    Text("\(Fmt.eurShort(summary.plannedEUR)) sur \(Fmt.eurShort(summary.budgetEUR))")
-                        .font(.caption).foregroundStyle(.secondary)
+            .foregroundStyle(.white)
+            .padding(18)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background {
+                ZStack {
+                    LinearGradient(colors: [trip.accent, trip.accent.opacity(0.7)], startPoint: .topLeading, endPoint: .bottomTrailing)
+                    Image(systemName: "airplane")
+                        .font(.system(size: 90, weight: .bold))
+                        .foregroundStyle(.white.opacity(0.10))
+                        .rotationEffect(.degrees(-20))
+                        .offset(x: 120, y: 10)
                 }
             }
-            if CloudSharing.isShared(trip) {
-                GlassChip(text: CloudSharing.isParticipant(trip) ? "Partagé avec moi" : "Partagé", symbol: "person.2.fill", tint: trip.accent)
+
+            // Corps : dates, budget, partage.
+            VStack(alignment: .leading, spacing: 10) {
+                if let start = trip.startDate, let end = trip.endDate {
+                    Label("\(Fmt.day(start)) → \(Fmt.day(end)) · \(trip.dayKeys.count) jours", systemImage: "calendar")
+                        .font(.subheadline).foregroundStyle(.secondary)
+                }
+                if summary.budgetEUR > 0 {
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack {
+                            Text("Budget").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                            Spacer()
+                            Text("\(Fmt.eurShort(summary.plannedEUR)) / \(Fmt.eurShort(summary.budgetEUR))")
+                                .font(.caption.weight(.semibold)).monospacedDigit()
+                        }
+                        ProgressBar(fraction: summary.consumedFraction, tint: trip.accent)
+                    }
+                }
+                if CloudSharing.isShared(trip) {
+                    Label(CloudSharing.isParticipant(trip) ? "Partagé avec moi" : "Partagé", systemImage: "person.2.fill")
+                        .font(.caption.weight(.semibold)).foregroundStyle(trip.accent)
+                }
             }
+            .padding(16)
         }
-        .overlay(alignment: .leading) {
-            Capsule().fill(trip.accent).frame(width: 5).padding(.vertical, 18)
-        }
+        .background(Color(.secondarySystemGroupedBackground))
+        .clipShape(.rect(cornerRadius: Theme.cardRadius, style: .continuous))
+        .shadow(color: trip.accent.opacity(0.18), radius: 14, x: 0, y: 6)
         .accessibilityElement(children: .combine)
         .accessibilityHint("Ouvre le voyage")
     }
 
     @ViewBuilder
     private var countdown: some View {
-        if trip.isOngoing() {
-            GlassChip(text: "En cours", symbol: "airplane.departure", tint: trip.accent)
-        } else if trip.isFinished() {
-            Text("Terminé").font(.caption).foregroundStyle(.secondary)
-        } else if let days = trip.daysUntilDeparture() {
-            VStack(spacing: 0) {
-                Text("J-\(max(0, days))").font(.title.bold()).fontDesign(.rounded).foregroundStyle(trip.accent)
-                Text(days <= 1 ? "jour" : "jours").font(.caption2).foregroundStyle(.secondary)
+        Group {
+            if trip.isOngoing() {
+                Label("En cours", systemImage: "airplane.departure").font(.subheadline.weight(.bold))
+            } else if trip.isFinished() {
+                Text("Terminé").font(.subheadline.weight(.bold))
+            } else if let days = trip.daysUntilDeparture() {
+                VStack(spacing: 0) {
+                    Text("J-\(max(0, days))").font(.title2.weight(.heavy)).fontDesign(.rounded).monospacedDigit()
+                    Text(days <= 1 ? "jour" : "jours").font(.caption2.weight(.semibold)).opacity(0.9)
+                }
+                .accessibilityLabel("Départ dans \(days) jours")
             }
-            .accessibilityLabel("Départ dans \(days) jours")
         }
+        .padding(.horizontal, 12).padding(.vertical, 6)
+        .background(.white.opacity(0.2), in: .rect(cornerRadius: 14, style: .continuous))
     }
 }
 

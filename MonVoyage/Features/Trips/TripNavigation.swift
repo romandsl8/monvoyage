@@ -41,6 +41,35 @@ enum TripModule: String, CaseIterable, Identifiable, Hashable {
         }
     }
 
+    /// Couleur propre à chaque module (pastilles d'icônes).
+    var color: Color {
+        switch self {
+        case .today, .more: return .orange
+        case .budget: return .green
+        case .dueDates: return .red
+        case .planning: return .blue
+        case .reservations: return .indigo
+        case .calculator: return .teal
+        case .checklists: return .mint
+        case .parks: return .purple
+        case .tools: return .gray
+        case .tripSettings: return .pink
+        }
+    }
+
+    /// Courte description (menu « Plus »).
+    var subtitle: String {
+        switch self {
+        case .dueDates: return "Acomptes et versements à venir"
+        case .calculator: return "Prix US hors taxe → total"
+        case .checklists: return "Valise, documents, à faire"
+        case .parks: return "Temps d'attente et ma liste"
+        case .tools: return "Horloges et conversions"
+        case .tripSettings: return "Partage, passeports, rappels"
+        default: return ""
+        }
+    }
+
     /// Onglets de la barre du bas (format compact).
     static let tabs: [TripModule] = [.today, .budget, .planning, .reservations, .more]
     /// Modules regroupés sous « Plus ».

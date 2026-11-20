@@ -53,37 +53,64 @@ struct BudgetView: View {
     }
 
     private func totals(_ s: BudgetSummary) -> some View {
-        Card {
-            CardTitle(title: "Vue d'ensemble", symbol: "eurosign.circle.fill", tint: trip.accent)
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: 20) { totalItems(s) }
-                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], alignment: .leading, spacing: 14) { totalItems(s) }
-            }
-            if s.budgetEUR > 0 {
-                ProgressBar(fraction: s.consumedFraction, tint: trip.accent)
-                Text(s.gapEUR >= 0 ? "Marge de \(Fmt.eur(s.gapEUR)) sur le budget de \(Fmt.eur(s.budgetEUR))"
-                                   : "Dépassement de \(Fmt.eur(-s.gapEUR)) sur le budget de \(Fmt.eur(s.budgetEUR))")
-                    .font(.caption).foregroundStyle(s.gapEUR >= 0 ? Color.secondary : Color.red)
-            }
-            if let next = s.nextDue, let due = next.dueDate {
-                Divider()
-                HStack {
-                    Image(systemName: "calendar.badge.clock").foregroundStyle(next.computedStatus == .overdue ? .red : trip.accent)
-                    VStack(alignment: .leading) {
-                        Text("Prochaine échéance : \(Fmt.day(due))").font(.subheadline.weight(.semibold))
-                        Text("\(Fmt.money(next.amount, next.currencyCode)) · \(next.expense?.wTitle ?? "")").font(.caption).foregroundStyle(.secondary)
+        VStack(spacing: 12) {
+            HeroCard(tint: trip.accent) {
+                HStack(alignment: .center, spacing: 16) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(s.budgetEUR > 0 ? (s.gapEUR >= 0 ? "Reste disponible" : "Dépassement") : "Total prévu")
+                            .font(.subheadline.weight(.semibold)).opacity(0.9)
+                        Text(Fmt.eurShort(s.budgetEUR > 0 ? abs(s.gapEUR) : s.plannedEUR))
+                            .font(.system(size: 40, weight: .heavy, design: .rounded)).monospacedDigit()
+                            .minimumScaleFactor(0.5).lineLimit(1)
+                        if s.budgetEUR > 0 {
+                            Text("sur un budget de \(Fmt.eurShort(s.budgetEUR))").font(.caption.weight(.medium)).opacity(0.9)
+                        } else {
+                            Text("Définissez un budget total dans le voyage").font(.caption.weight(.medium)).opacity(0.9)
+                        }
+                    }
+                    Spacer(minLength: 0)
+                    if s.budgetEUR > 0 {
+                        ZStack {
+                            Circle().stroke(.white.opacity(0.25), lineWidth: 10)
+                            Circle().trim(from: 0, to: min(1, s.consumedFraction))
+                                .stroke(.white, style: StrokeStyle(lineWidth: 10, lineCap: .round))
+                                .rotationEffect(.degrees(-90))
+                            VStack(spacing: 0) {
+                                Text(Fmt.percent(min(s.consumedFraction, 9.99))).font(.headline.bold()).fontDesign(.rounded)
+                                Text("engagé").font(.caption2.weight(.semibold)).opacity(0.9)
+                            }
+                        }
+                        .frame(width: 92, height: 92)
+                        .accessibilityElement(children: .combine)
                     }
                 }
             }
-        }
-    }
 
-    @ViewBuilder
-    private func totalItems(_ s: BudgetSummary) -> some View {
-        BigNumber(label: "Prévu", value: Fmt.eurShort(s.plannedEUR))
-        BigNumber(label: "Payé", value: Fmt.eurShort(s.paidEUR), tint: .green)
-        BigNumber(label: "Reste à payer", value: Fmt.eurShort(s.remainingEUR), tint: .orange)
-        BigNumber(label: "Écart au budget", value: Fmt.eurShort(s.gapEUR), tint: s.gapEUR >= 0 ? .primary : .red)
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 10)], spacing: 10) {
+                StatTile(label: "Prévu", value: Fmt.eurShort(s.plannedEUR), symbol: "list.bullet.rectangle", tint: trip.accent)
+                StatTile(label: "Payé", value: Fmt.eurShort(s.paidEUR), symbol: "checkmark.circle.fill", tint: .green)
+                StatTile(label: "Reste à payer", value: Fmt.eurShort(s.remainingEUR), symbol: "hourglass", tint: .orange)
+                StatTile(label: "Avant le voyage", value: Fmt.eurShort(s.preTripEUR), symbol: "airplane.departure", tint: .blue)
+            }
+
+            if let next = s.nextDue, let due = next.dueDate {
+                Button { nav.open(.dueDates) } label: {
+                    HStack(spacing: 12) {
+                        IconBubble(symbol: "calendar.badge.clock", tint: next.computedStatus == .overdue ? .red : trip.accent)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Prochaine échéance · \(Fmt.day(due))").font(.subheadline.weight(.semibold)).foregroundStyle(.primary)
+                            Text("\(Fmt.money(next.amount, next.currencyCode)) · \(next.expense?.wTitle ?? "")")
+                                .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                        }
+                        Spacer()
+                        Image(systemName: "chevron.right").font(.caption.weight(.bold)).foregroundStyle(.tertiary)
+                    }
+                    .padding(14)
+                    .background(Color(.secondarySystemGroupedBackground), in: .rect(cornerRadius: 18, style: .continuous))
+                }
+                .buttonStyle(.plain)
+            }
+        }
     }
 
     private struct TotalSlice: Identifiable {

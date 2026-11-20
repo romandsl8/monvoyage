@@ -68,6 +68,8 @@ struct ParksListView: View {
             }
             Section { QueueTimesCredit() }
         }
+        .scrollContentBackground(.hidden)
+        .groupedBackground()
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button { showAddPark = true } label: { Label("Ajouter un parc", systemImage: "plus") }
@@ -201,6 +203,8 @@ struct ParkDetailView: View {
             }
         }
         .navigationTitle(park.wName)
+        .scrollContentBackground(.hidden)
+        .groupedBackground()
         .toolbar { EditButton() }
         .refreshable { await refreshWaits() }
         .task {

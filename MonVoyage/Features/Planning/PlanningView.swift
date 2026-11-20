@@ -56,16 +56,29 @@ struct DayCard: View {
         let date = DayKey.date(fromKey: dayKey) ?? Date()
         let isToday = dayKey == DayKey.key(Date())
         Card {
-            HStack(alignment: .firstTextBaseline) {
+            HStack(alignment: .center, spacing: 12) {
+                // Pastille de date : numéro du jour et mois.
+                VStack(spacing: 0) {
+                    Text(date.formatted(.dateTime.day().locale(SharedLocale.fr)))
+                        .font(.title2.weight(.heavy)).fontDesign(.rounded).monospacedDigit()
+                    Text(date.formatted(.dateTime.month(.abbreviated).locale(SharedLocale.fr)).uppercased())
+                        .font(.caption2.weight(.bold))
+                }
+                .foregroundStyle(isToday ? Color.white : trip.accent)
+                .frame(width: 54, height: 54)
+                .background(isToday ? trip.accent : trip.accent.opacity(0.14), in: .rect(cornerRadius: 16, style: .continuous))
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(Fmt.longDay(date).capitalized).font(.headline).fontDesign(.rounded)
+                    Text(date.formatted(.dateTime.weekday(.wide).locale(SharedLocale.fr)).capitalized)
+                        .font(.headline).fontDesign(.rounded)
                     if let index = trip.dayKeys.firstIndex(of: dayKey) {
-                        Text("Jour \(index + 1)").font(.caption).foregroundStyle(.secondary)
+                        Text("Jour \(index + 1) sur \(trip.dayKeys.count)").font(.caption).foregroundStyle(.secondary)
                     }
                 }
                 Spacer()
                 if isToday { GlassChip(text: "Aujourd'hui", symbol: "sun.max.fill", tint: trip.accent) }
             }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(Fmt.longDay(date))
             DayHeaderInfo(trip: trip, dayKey: dayKey)
             ForEach(trip.flights(on: dayKey), id: \.objectID) { segment in
                 FlightLine(segment: segment)
@@ -171,7 +184,7 @@ struct FlightLine: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            Image(systemName: "airplane").foregroundStyle(Color.accentColor).frame(width: 28)
+            IconBubble(symbol: "airplane", tint: .accentColor, size: 32)
             VStack(alignment: .leading, spacing: 1) {
                 Text("\(segment.flightNumber ?? "Vol") · \(segment.routeText)").font(.subheadline.weight(.semibold))
                 if let dep = segment.departureDate, let arr = segment.arrivalDate {
@@ -194,7 +207,7 @@ struct ActivityLine: View {
                 .font(.subheadline.monospacedDigit())
                 .foregroundStyle(.secondary)
                 .frame(width: 48, alignment: .leading)
-            Image(systemName: activity.kind.symbol).foregroundStyle(Color.accentColor).frame(width: 22)
+            IconBubble(symbol: activity.kind.symbol, tint: .accentColor, size: 28)
             VStack(alignment: .leading, spacing: 1) {
                 Text(activity.wTitle).font(.subheadline)
                 if let place = activity.place, !place.isEmpty { Text(place).font(.caption).foregroundStyle(.secondary) }
