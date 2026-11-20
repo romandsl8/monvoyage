@@ -52,7 +52,15 @@ struct TodayView: View {
         Card {
             HStack(alignment: .center) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(Fmt.longDay(now, timeZone: trip.tripTimeZone).capitalized).font(.title2.bold()).fontDesign(.rounded)
+                    if trip.isOngoing(now: now) {
+                        Text(Fmt.longDay(now, timeZone: trip.tripTimeZone).capitalized).font(.title2.bold()).fontDesign(.rounded)
+                    } else if let start = trip.startDate {
+                        // Avant (ou après) le voyage : on affiche les dates du voyage, pas celle du jour.
+                        Text(Fmt.longDay(start).capitalized).font(.title2.bold()).fontDesign(.rounded)
+                        if let end = trip.endDate, DayKey.key(end) != DayKey.key(start) {
+                            Text("au \(Fmt.longDay(end)) · \(trip.dayKeys.count) jours").font(.subheadline).foregroundStyle(.secondary)
+                        }
+                    }
                     if let city = trip.city { Text(city).foregroundStyle(.secondary) }
                 }
                 Spacer()
@@ -160,6 +168,14 @@ struct TodayView: View {
                 }
                 .buttonStyle(.glass)
                 .font(.caption)
+            } else if let daily = BudgetSummary.daily(trip: trip, now: now), daily.isBeforeTrip {
+                HStack(alignment: .firstTextBaseline) {
+                    BigNumber(label: "Par jour sur place", value: Fmt.eurShort(daily.perDayEUR), tint: trip.accent)
+                    Spacer()
+                    BigNumber(label: "En dollars", value: Fmt.usd(Money.fromEUR(daily.perDayEUR, currency: "USD", rateEURPerUnit: rates.usdToEUR)))
+                }
+                Text("Prévision pour les \(daily.daysRemaining) jours du voyage, après déduction des dépenses réglées avant le départ (\(Fmt.eurShort(BudgetSummary(trip: trip).preTripEUR))). Le suivi jour par jour commencera le premier jour du voyage.")
+                    .font(.caption).foregroundStyle(.secondary)
             } else if let daily = BudgetSummary.daily(trip: trip, now: now) {
                 HStack(alignment: .firstTextBaseline) {
                     BigNumber(label: "Aujourd'hui", value: Fmt.eurShort(daily.perDayEUR), tint: StatusColor.budget(daily.status))
@@ -233,6 +249,5 @@ struct TodayView: View {
         for park in trip.parks(on: todayKey) where park.queueTimesID > 0 {
             await queueTimes.refreshWaits(parkID: park.queueTimesID)
         }
-        await LiveActivityManager.refresh(context: context)
     }
 }

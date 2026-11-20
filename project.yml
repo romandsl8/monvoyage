@@ -96,7 +96,6 @@ targets:
           - fetch
         BGTaskSchedulerPermittedIdentifiers:
           - $(APP_BUNDLE_ID).refresh
-        NSSupportsLiveActivities: true
         CKSharingSupported: true
         NSCameraUsageDescription: "MonVoyage utilise l'appareil photo pour scanner vos tickets de caisse et photographier vos documents de voyage."
         NSPhotoLibraryUsageDescription: "MonVoyage accède à vos photos pour joindre un ticket ou un document à une dépense ou une réservation."

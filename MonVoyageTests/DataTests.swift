@@ -115,11 +115,52 @@ final class DataTests: XCTestCase {
         meal.amountEUR = 40
         meal.date = Date()
         meal.category = trip.category(named: "Repas")
+        // Budget total 6 000 € − vol (avant le voyage) 900 € = 5 100 € sur place, sur 10 jours.
         let daily = BudgetSummary.daily(trip: trip, now: Date())
         XCTAssertEqual(daily?.daysRemaining, 10)
-        XCTAssertEqual(daily?.perDayEUR, 100)
+        XCTAssertEqual(daily?.perDayEUR, 510)
         XCTAssertEqual(daily?.spentTodayEUR, 40)
         XCTAssertEqual(daily?.status, 0)
+        XCTAssertEqual(daily?.isBeforeTrip, false)
+
+        // Sans budget total : somme des budgets des catégories sur place (5 × 200 €).
+        trip.totalBudgetEUR = 0
+        XCTAssertEqual(BudgetSummary.daily(trip: trip, now: Date())?.perDayEUR, 100)
+    }
+
+    /// Le moment choisi (avant / pendant) prime sur la catégorie.
+    func testExpensePhase() {
+        let trip = makeTrip()
+        let expense = context.make(Expense.self, trip: trip)
+        expense.trip = trip
+        expense.amountEUR = 300
+        expense.category = trip.category(named: "Vols")
+        XCTAssertTrue(expense.isPreTrip)                 // auto : catégorie « avant départ »
+        expense.phaseRaw = ExpensePhase.duringTrip.rawValue
+        XCTAssertFalse(expense.isPreTrip)
+        expense.category = trip.category(named: "Repas")
+        expense.phaseRaw = ExpensePhase.beforeTrip.rawValue
+        XCTAssertTrue(expense.isPreTrip)
+        let summary = BudgetSummary(trip: trip)
+        XCTAssertEqual(summary.preTripEUR, 300)
+        XCTAssertEqual(summary.duringTripEUR, 0)
+    }
+
+    /// Avant le départ : montant prévu par jour, pas de « dépensé aujourd'hui ».
+    func testDailyBudgetBeforeTrip() throws {
+        let start = Date().addingTimeInterval(30 * 86400)
+        let trip = TripFactory.createTrip(in: context, name: "Plus tard", start: start, end: start.addingTimeInterval(9 * 86400))
+        trip.totalBudgetEUR = 3000
+        let hotel = context.make(Expense.self, trip: trip)
+        hotel.trip = trip
+        hotel.amountEUR = 1000
+        hotel.date = Date()
+        hotel.phaseRaw = ExpensePhase.beforeTrip.rawValue
+        let daily = try XCTUnwrap(BudgetSummary.daily(trip: trip, now: Date()))
+        XCTAssertTrue(daily.isBeforeTrip)
+        XCTAssertEqual(daily.daysRemaining, 10)
+        XCTAssertEqual(daily.perDayEUR, 200)
+        XCTAssertEqual(daily.spentTodayEUR, 0)
     }
 
     /// Critère : un export puis un import restaurent un voyage à l'identique, avec de nouveaux UUID.

@@ -28,6 +28,8 @@ struct BudgetSummary {
         paidEUR = Money.round2(expenses.reduce(0) { $0 + $1.paidEUR })
         remainingEUR = Money.round2(expenses.reduce(0) { $0 + $1.remainingEUR })
         gapEUR = Money.round2(budgetEUR - plannedEUR)
+        preTripEUR = Money.round2(expenses.filter(\.isPreTrip).reduce(0) { $0 + $1.amountEUR })
+        duringTripEUR = Money.round2(plannedEUR - preTripEUR)
         nextDue = expenses.flatMap { $0.installmentList }
             .filter { !$0.isPaid }
             .sorted { ($0.dueDate ?? .distantFuture) < ($1.dueDate ?? .distantFuture) }
@@ -52,39 +54,47 @@ struct BudgetSummary {
 
     // MARK: - Budget restant par jour
 
-    /// Budget « sur place » : catégories non marquées « avant départ » si elles ont un budget,
-    /// sinon budget total − frais avant/après départ − dépenses des catégories avant départ.
+    /// Dépenses réglées avant le voyage (vols, hôtel, billets…).
+    var preTripEUR: Double = 0
+    /// Dépenses sur place (pendant le voyage).
+    var duringTripEUR: Double = 0
+
+    /// Budget « sur place » :
+    /// - si un budget total est défini : budget total − frais avant/après − dépenses « avant le voyage » ;
+    /// - sinon : somme des budgets des catégories non marquées « avant départ ».
     static func onSiteBudget(trip: Trip) -> Double {
-        let onSiteCats = trip.categoryList.filter { !$0.isPreDeparture }
-        let planned = onSiteCats.reduce(0) { $0 + $1.plannedEUR }
-        if planned > 0 { return planned }
-        let preSpent = trip.expenseList.filter { $0.category?.isPreDeparture == true }.reduce(0) { $0 + $1.amountEUR }
-        return max(0, trip.totalBudgetEUR - trip.preDepartureFeesEUR - trip.postDepartureFeesEUR - preSpent)
+        if trip.totalBudgetEUR > 0 {
+            let preTrip = trip.expenseList.filter(\.isPreTrip).reduce(0) { $0 + $1.amountEUR }
+            return max(0, trip.totalBudgetEUR - trip.preDepartureFeesEUR - trip.postDepartureFeesEUR - preTrip)
+        }
+        return trip.categoryList.filter { !$0.isPreDeparture }.reduce(0) { $0 + $1.plannedEUR }
     }
 
     static func isOnSite(_ expense: Expense) -> Bool {
-        expense.category?.isPreDeparture != true
+        !expense.isPreTrip
     }
 
+    /// Budget restant par jour. Avant le départ : budget sur place ÷ nombre de jours du voyage
+    /// (`isBeforeTrip` = true, rien n'est « dépensé aujourd'hui »).
     static func daily(trip: Trip, now: Date = Date()) -> DailyBudgetResult? {
         guard let start = trip.startDate, let end = trip.endDate, !trip.isFinished(now: now) else { return nil }
         let todayKey = DayKey.key(now)
-        let startKey = DayKey.key(start), endKey = DayKey.key(end)
-        let daysRemaining: Int
-        if trip.isOngoing(now: now) {
-            daysRemaining = DayMath.daysBetween(now, end) + 1
-        } else {
-            daysRemaining = DayMath.daysBetween(start, end) + 1
-        }
+        let endKey = DayKey.key(end)
+        let ongoing = trip.isOngoing(now: now)
+        let daysRemaining = ongoing ? DayMath.daysBetween(now, end) + 1 : DayMath.daysBetween(start, end) + 1
         var before = 0.0, today = 0.0
         for expense in trip.expenseList where isOnSite(expense) {
             guard let date = expense.date else { continue }
             let key = DayKey.key(date)
-            guard key >= startKey && key <= endKey else { continue }
-            if key < todayKey { before += expense.amountEUR }
-            else if key == todayKey { today += expense.amountEUR }
+            guard key <= endKey else { continue }
+            if ongoing && key == todayKey { today += expense.amountEUR } else if key <= todayKey || !ongoing { before += expense.amountEUR }
         }
-        return DailyBudgetCalculator.compute(onSiteBudgetEUR: onSiteBudget(trip: trip), spentBeforeTodayEUR: before,
-                                             spentTodayEUR: today, daysRemaining: daysRemaining)
+        var result = DailyBudgetCalculator.compute(onSiteBudgetEUR: onSiteBudget(trip: trip), spentBeforeTodayEUR: before,
+                                                   spentTodayEUR: today, daysRemaining: daysRemaining)
+        if !ongoing {
+            result.isBeforeTrip = true
+            result.status = result.perDayEUR > 0 ? 0 : 2
+        }
+        return result
     }
 }

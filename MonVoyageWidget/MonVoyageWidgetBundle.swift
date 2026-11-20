@@ -7,7 +7,6 @@ struct MonVoyageWidgetBundle: WidgetBundle {
         CountdownWidget()
         DailyBudgetWidget()
         NextActivityWidget()
-        TripLiveActivity()
         QuickAddControl()
     }
 }

@@ -61,6 +61,18 @@ struct ReservationEditorView: View {
     @State private var previewURL: URL?
     @State private var loaded = false
     @State private var confirmDelete = false
+    @State private var countInBudget = true
+    @State private var hadExpense = false
+    @State private var payment = PaymentDraft()
+    @EnvironmentObject private var rates: ExchangeRateService
+
+    private var amount: Double { Money.parse(amountText) ?? 0 }
+
+    /// Date de la dépense liée : début de la réservation (premier vol), sinon aujourd'hui.
+    private var paymentDate: Date {
+        if reservationKind == .flight, let first = flights.map(\.departureDate).min() { return first }
+        return hasDates ? start : Date()
+    }
 
     static func categoryName(for kind: ReservationKind) -> String? {
         switch kind {
@@ -124,7 +136,21 @@ struct ReservationEditorView: View {
                         Text("$").tag("USD")
                     }
                     .pickerStyle(.segmented)
+                    if amount > 0 {
+                        Toggle("Compter dans le budget", isOn: $countInBudget.animation())
+                    }
                     TextField("Note", text: $note, axis: .vertical)
+                } header: {
+                    Text("Montant")
+                } footer: {
+                    if amount > 0 && countInBudget {
+                        Text("La dépense correspondante est créée et mise à jour automatiquement avec cette réservation.")
+                    }
+                }
+
+                if amount > 0 && countInBudget {
+                    PaymentSections(draft: $payment, amount: amount, currency: currency,
+                                    date: paymentDate, trip: trip)
                 }
 
                 Section("Pièces jointes") {
@@ -190,7 +216,17 @@ struct ReservationEditorView: View {
         end = trip.endDate ?? Date()
         guard let reservationID, let r = try? context.existingObject(with: reservationID) as? Reservation else {
             if kind == .flight { flights = [defaultFlight()] }
+            payment.categoryID = Self.categoryName(for: kind).flatMap { trip.category(named: $0)?.objectID }
+            payment.isSettled = false
             return
+        }
+        if let expense = r.expense {
+            payment = PaymentDraft(expense: expense)
+            hadExpense = true
+            countInBudget = true
+        } else {
+            payment.categoryID = Self.categoryName(for: r.kind).flatMap { trip.category(named: $0)?.objectID }
+            payment.isSettled = false
         }
         reservationKind = r.kind
         title = r.title ?? ""
@@ -290,6 +326,31 @@ struct ReservationEditorView: View {
             a.name = draft.name
             a.sortIndex = Int32(i)
         }
+
+        // Dépense liée (alimente le budget)
+        if countInBudget && r.amount > 0 {
+            let expense: Expense
+            if let existing = r.expense {
+                expense = existing
+            } else {
+                expense = context.make(Expense.self, trip: trip)
+                expense.trip = trip
+                expense.reservation = r
+            }
+            let sameCurrency = expense.currency == currency && expense.amount > 0
+            let rate = currency == "EUR" ? 1 : (sameCurrency ? expense.rateUsed : rates.rate(for: currency))
+            expense.title = r.wTitle
+            expense.amount = r.amount
+            expense.currency = currency
+            expense.rateUsed = rate
+            expense.amountEUR = Money.toEUR(r.amount, currency: currency, rateEURPerUnit: rate)
+            expense.date = paymentDate
+            if expense.merchant == nil, !provider.isEmpty { expense.merchant = provider }
+            PaymentSync.apply(payment, to: expense, currency: currency, trip: trip, rates: rates, context: context)
+        } else if hadExpense, !countInBudget, let existing = r.expense {
+            context.delete(existing)
+        }
+
         context.saveIfNeeded()
         dismiss()
     }

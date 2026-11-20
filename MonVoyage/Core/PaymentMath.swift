@@ -113,6 +113,8 @@ struct DailyBudgetResult: Equatable {
     var spentTodayEUR: Double
     /// 0 = vert, 1 = orange, 2 = rouge
     var status: Int
+    /// Le voyage n'a pas commencé : montant prévu par jour sur place.
+    var isBeforeTrip = false
 }
 
 enum DailyBudgetCalculator {

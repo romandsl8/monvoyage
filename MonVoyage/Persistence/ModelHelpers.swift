@@ -10,6 +10,30 @@ enum InstallmentKind: Int16, CaseIterable, Identifiable {
     var label: String { self == .deposit ? "Acompte" : "Versement" }
 }
 
+/// Moment d'une dépense par rapport au voyage (attribut `phaseRaw`, modèle v2).
+enum ExpensePhase: Int16, CaseIterable, Identifiable {
+    /// Anciennes dépenses : déduit de la catégorie (« avant départ »).
+    case auto = 0
+    case beforeTrip = 1
+    case duringTrip = 2
+    var id: Int16 { rawValue }
+    var label: String {
+        switch self {
+        case .auto: return "Selon la catégorie"
+        case .beforeTrip: return "Avant le voyage"
+        case .duringTrip: return "Pendant le voyage"
+        }
+    }
+
+    /// Valeur proposée par défaut : catégorie « avant départ » ou date antérieure au voyage → avant.
+    static func suggested(category: BudgetCategory?, date: Date?, trip: Trip) -> ExpensePhase {
+        if category?.isPreDeparture == true { return .beforeTrip }
+        if let date, let start = trip.startDate, DayKey.key(date) < DayKey.key(start) { return .beforeTrip }
+        if category == nil, date == nil { return .beforeTrip }
+        return .duringTrip
+    }
+}
+
 enum ActivityKind: Int16, CaseIterable, Identifiable {
     case park = 0, attraction, restaurant, transport, flight, other
     var id: Int16 { rawValue }
@@ -183,6 +207,18 @@ extension Trip {
 extension Expense {
     var wTitle: String { (title?.isEmpty == false ? title : nil) ?? (merchant ?? "Dépense") }
     var currencyCode: String { currency ?? "EUR" }
+
+    var phase: ExpensePhase { ExpensePhase(rawValue: phaseRaw) ?? .auto }
+
+    /// Dépense réglée avant le voyage (exclue du budget sur place).
+    var isPreTrip: Bool {
+        switch phase {
+        case .beforeTrip: return true
+        case .duringTrip: return false
+        case .auto: return category?.isPreDeparture == true
+        }
+    }
+
     var installmentList: [PaymentInstallment] {
         sortedSet(installments) {
             if $0.sortIndex != $1.sortIndex { return $0.sortIndex < $1.sortIndex }

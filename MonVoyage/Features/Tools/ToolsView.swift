@@ -16,7 +16,6 @@ struct ToolsView: View {
                 clocks
                 converter
                 sizes
-                liveActivity
             }
             .padding()
         }
@@ -98,16 +97,6 @@ struct ToolsView: View {
         }
     }
 
-    private var liveActivity: some View {
-        Card {
-            CardTitle(title: "Live Activity", symbol: "platter.filled.top.iphone", tint: trip.accent)
-            Text("S'affiche automatiquement un jour de vol ou de parc à l'ouverture de l'appli.").font(.caption).foregroundStyle(.secondary)
-            HStack {
-                Button("Démarrer maintenant") { Task { await LiveActivityManager.refresh(context: context) } }.buttonStyle(.glass)
-                Button("Arrêter") { Task { await LiveActivityManager.endAll() } }.buttonStyle(.glass)
-            }
-        }
-    }
 }
 
 /// Conversions d'unités hors ligne.

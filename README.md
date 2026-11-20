@@ -2,7 +2,7 @@
 
 Application iPhone native (SwiftUI, iOS 26, Liquid Glass) pour **budgétiser et préparer un voyage à deux** :
 budget et échéancier, calculateur taxes/pourboire, checklists, planning jour par jour avec météo et affluence des parcs,
-réservations et vols, vue « Aujourd'hui », widgets, Live Activity, Siri, scan de tickets — le tout **hors ligne**
+réservations et vols, vue « Aujourd'hui », widgets, Siri, scan de tickets — le tout **hors ligne**
 et **partagé entre deux comptes iCloud**.
 
 > Pas de Mac nécessaire : le code est sur GitHub, **GitHub Actions** (machine Mac, Xcode 27.2) génère le projet, lance les tests, signe et envoie sur
@@ -15,7 +15,7 @@ et **partagé entre deux comptes iCloud**.
 | Module | Contenu |
 | --- | --- |
 | Voyages | Liste avec compte à rebours et jauge de budget ; créer, modifier, dupliquer, archiver, supprimer ; ville via le géocodage Open-Meteo (coordonnées + fuseau) ; partage iCloud. |
-| Budget | Catégories modifiables avec budget prévu, dépenses en EUR ou USD (taux du jour stocké), échéancier facultatif (acompte en montant ou %, solde en N fois égales avec reliquat sur le dernier, avertissement d'écart, statuts à venir / payé / en retard, conversion au taux du jour de paiement), totaux prévu / payé / reste à payer / écart, graphiques Swift Charts (anneau + barres). |
+| Budget | Catégories modifiables avec budget prévu, dépenses en EUR ou USD (taux du jour stocké), échéancier facultatif (acompte en montant ou %, solde en N fois égales avec reliquat sur le dernier, avertissement d'écart, statuts à venir / payé / en retard, conversion au taux du jour de paiement), totaux prévu / payé / reste à payer / écart, chaque dépense classée « avant le voyage » ou « pendant le voyage » (seules les secondes comptent dans le budget par jour), graphiques Swift Charts (budget total avant / pendant / reste, anneau, barres). Les réservations avec un montant créent et tiennent à jour leur dépense, échéancier compris. |
 | Échéances | Tous les versements triés par date, retards en rouge, total par mois, « payé » par balayage. |
 | Taxes et pourboire | Prix HT en USD + taxe (6,5 % par défaut) + pourboire (0/15/18/20/22 % ou libre), résultat en USD et EUR, « Ajouter comme dépense ». |
 | Checklists | Plusieurs listes, éléments réordonnables, échéance, voyageur assigné, progression, retour haptique. |
@@ -23,7 +23,7 @@ et **partagé entre deux comptes iCloud**.
 | Réservations | Fiches typées, n° copiable, pièces jointes photo/PDF consultables hors ligne (QuickLook), dépense liée ; fiche vol détaillée (trajets multiples, compagnie déduite du code, heures locales par aéroport, durée avec décalage, rappels d'enregistrement et de départ, statut du vol). |
 | Parcs | Affluence /10 datée (fichier publié par GitHub Actions, ou saisie manuelle), import des attractions Queue-Times, priorités, Express, taille mini, jour assigné, temps d'attente en direct, progression. |
 | Aujourd'hui | Prochaines activités, météo, parcs du jour, budget restant par jour (EUR/USD, vert/orange/rouge), dépenses du jour, échéances et rappels. Grille 2 colonnes sur grand écran. |
-| Outils | Siri / Raccourcis / bouton Action / contrôle du Centre de contrôle, scan de tickets (Vision, sur l'iPhone), Live Activity, alertes passeport/ESTA, double horloge, conversions, tailles US ↔ FR. |
+| Outils | Siri / Raccourcis / bouton Action / contrôle du Centre de contrôle, scan de tickets (Vision, sur l'iPhone), alertes passeport/ESTA, double horloge, conversions, tailles US ↔ FR. |
 
 Mentions : météo [Open-Meteo](https://open-meteo.com), taux BCE via [Frankfurter](https://frankfurter.dev),
 attractions et temps d'attente **Powered by [Queue-Times.com](https://queue-times.com)** (mention affichée partout où ces données apparaissent),
@@ -42,13 +42,13 @@ MonVoyage/
   App/                       Point d'entrée, AppDelegate/SceneDelegate (acceptation du partage), routeur, racine
   Persistence/               Modèle Core Data (.xcdatamodeld v1), pile CloudKit, sauvegarde, partage CKShare
   Core/                      Logique pure et testable (argent, échéancier, vols, tickets, météo, ZIP, jours)
-  Services/                  Réseau et caches, taux, météo, parcs/affluence, notifications, widget, Live Activity, export/import
+  Services/                  Réseau et caches, taux, météo, parcs/affluence, notifications, widget, export/import
   Features/                  Écrans SwiftUI par module
   Intents/                   App Intents (Siri, Raccourcis, bouton Action)
   UI/                        Composants (cartes, chiffres clés, états vides, verre)
   Resources/Assets.xcassets  Icône (claire, sombre, teintée) et couleur d'accent
-MonVoyageWidget/             Widgets, Live Activity / Dynamic Island, contrôle du Centre de contrôle
-Shared/                      Code commun appli + widget (App Group, instantané widget, attributs Live Activity, intention d'ajout express)
+MonVoyageWidget/             Widgets, contrôle du Centre de contrôle
+Shared/                      Code commun appli + widget (App Group, instantané widget, intention d'ajout express)
 MonVoyageTests/              Tests unitaires
 ```
 

@@ -16,6 +16,7 @@ struct BudgetView: View {
         ScrollView {
             VStack(spacing: 16) {
                 totals(summary)
+                totalChart(summary)
                 if sizeClass == .regular {
                     HStack(alignment: .top, spacing: 16) {
                         donut(summary)
@@ -83,6 +84,77 @@ struct BudgetView: View {
         BigNumber(label: "Payé", value: Fmt.eurShort(s.paidEUR), tint: .green)
         BigNumber(label: "Reste à payer", value: Fmt.eurShort(s.remainingEUR), tint: .orange)
         BigNumber(label: "Écart au budget", value: Fmt.eurShort(s.gapEUR), tint: s.gapEUR >= 0 ? .primary : .red)
+    }
+
+    private struct TotalSlice: Identifiable {
+        let id: String
+        let label: String
+        let amount: Double
+        let color: Color
+    }
+
+    /// Budget total : avant le voyage + pendant le voyage + reste disponible.
+    private func totalChart(_ s: BudgetSummary) -> some View {
+        let remaining = max(0, s.budgetEUR - s.plannedEUR)
+        let slices = [
+            TotalSlice(id: "avant", label: "Avant le voyage", amount: s.preTripEUR, color: trip.accent),
+            TotalSlice(id: "pendant", label: "Pendant le voyage", amount: s.duringTripEUR, color: trip.accent.opacity(0.55)),
+            TotalSlice(id: "reste", label: "Reste du budget", amount: remaining, color: Color.secondary.opacity(0.25))
+        ].filter { $0.amount > 0 }
+        return Card {
+            CardTitle(title: "Budget total du voyage", symbol: "chart.bar.xaxis", tint: trip.accent)
+            if slices.isEmpty {
+                Text("Renseignez le budget total du voyage et ajoutez vos premières dépenses.")
+                    .font(.subheadline).foregroundStyle(.secondary)
+            } else {
+                Chart(slices) { slice in
+                    BarMark(x: .value("Montant", slice.amount), y: .value("Budget", "Total"))
+                        .foregroundStyle(slice.color)
+                        .annotation(position: .overlay) {
+                            if slice.amount >= max(s.budgetEUR, s.plannedEUR) * 0.15 {
+                                Text(Fmt.eurShort(slice.amount)).font(.caption2.bold()).foregroundStyle(.white)
+                            }
+                        }
+                }
+                .chartYAxis(.hidden)
+                .chartXAxis {
+                    AxisMarks { value in
+                        AxisGridLine()
+                        AxisValueLabel {
+                            if let v = value.as(Double.self) { Text(Fmt.eurShort(v)) }
+                        }
+                    }
+                }
+                .frame(height: 70)
+                .accessibilityLabel("Budget total : \(Fmt.eurShort(s.preTripEUR)) avant le voyage, \(Fmt.eurShort(s.duringTripEUR)) pendant, \(Fmt.eurShort(remaining)) restants")
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 16) { totalLegend(s, remaining: remaining) }
+                    VStack(alignment: .leading, spacing: 6) { totalLegend(s, remaining: remaining) }
+                }
+                if s.budgetEUR > 0 && s.plannedEUR > s.budgetEUR {
+                    Label("Dépassement de \(Fmt.eur(s.plannedEUR - s.budgetEUR))", systemImage: "exclamationmark.triangle.fill")
+                        .font(.caption).foregroundStyle(.red)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func totalLegend(_ s: BudgetSummary, remaining: Double) -> some View {
+        legendItem("Avant le voyage", s.preTripEUR, trip.accent)
+        legendItem("Pendant le voyage", s.duringTripEUR, trip.accent.opacity(0.55))
+        if s.budgetEUR > 0 { legendItem("Reste", remaining, Color.secondary.opacity(0.35)) }
+    }
+
+    private func legendItem(_ label: String, _ amount: Double, _ color: Color) -> some View {
+        HStack(spacing: 6) {
+            Circle().fill(color).frame(width: 10, height: 10)
+            VStack(alignment: .leading, spacing: 0) {
+                Text(label).font(.caption).foregroundStyle(.secondary)
+                Text(Fmt.eurShort(amount)).font(.subheadline.weight(.semibold)).monospacedDigit()
+            }
+        }
+        .accessibilityElement(children: .combine)
     }
 
     private func donut(_ s: BudgetSummary) -> some View {

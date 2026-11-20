@@ -69,7 +69,10 @@ final class WeatherService: ObservableObject {
         var cache = caches[tripKey] ?? CacheStore.load(TripWeatherCache.self, name: cacheName(tripKey))
         if !force, let c = cache, Date().timeIntervalSince(c.updatedAt) < Self.refreshInterval,
            c.latitude == latitude, c.longitude == longitude,
-           dayKeys.allSatisfy({ c.days[$0] != nil }) {
+           dayKeys.allSatisfy({ c.days[$0] != nil }),
+           // Un jour encore affiché en « normale » alors qu'il est entré dans la fenêtre
+           // des prévisions (16 jours) force la mise à jour, sans attendre 3 h.
+           !dayKeys.contains(where: { c.days[$0]?.isNormal == true && WeatherLogic.source(for: $0) == .forecast }) {
             caches[tripKey] = c
             return
         }

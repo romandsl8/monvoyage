@@ -2,22 +2,7 @@ import SwiftUI
 import CoreData
 import PhotosUI
 
-/// Brouillon d'un versement.
-struct InstallmentDraft: Identifiable, Equatable {
-    var id = UUID()
-    var objectID: NSManagedObjectID?
-    var kind: InstallmentKind = .installment
-    var amountText = ""
-    var dueDate = Date()
-    var isPaid = false
-    var paidDate: Date?
-    var paidRate: Double = 0
-    var payerID: NSManagedObjectID?
-
-    var amount: Double { Money.parse(amountText) ?? 0 }
-}
-
-/// Création / modification d'une dépense, avec échéancier facultatif.
+/// Création / modification d'une dépense, avec moment (avant / pendant le voyage) et échéancier facultatif.
 struct ExpenseEditorView: View {
     @ObservedObject var trip: Trip
     let expenseID: NSManagedObjectID?
@@ -30,28 +15,18 @@ struct ExpenseEditorView: View {
     @State private var title = ""
     @State private var amountText = ""
     @State private var currency = "EUR"
-    @State private var categoryID: NSManagedObjectID?
     @State private var date = Date()
-    @State private var payerID: NSManagedObjectID?
     @State private var merchant = ""
     @State private var note = ""
     @State private var isPretax = false
     @State private var tax: Double = 0
     @State private var tip: Double = 0
-    @State private var isSettled = true
     @State private var receipt: Data?
     @State private var storedRate: Double?
     @State private var originalCurrency: String?
     @State private var reservationID: NSManagedObjectID?
     @State private var activityID: NSManagedObjectID?
-
-    @State private var useSchedule = false
-    @State private var installments: [InstallmentDraft] = []
-    @State private var depositText = ""
-    @State private var depositIsPercent = false
-    @State private var depositDate = Date()
-    @State private var splitCount = 3
-    @State private var firstInstallmentDate = Date().addingTimeInterval(30 * 86400)
+    @State private var payment = PaymentDraft()
 
     @State private var photoItem: PhotosPickerItem?
     @State private var loaded = false
@@ -65,7 +40,6 @@ struct ExpenseEditorView: View {
         return rates.rate(for: currency)
     }
     private var amountEUR: Double { Money.toEUR(amount, currency: currency, rateEURPerUnit: rate) }
-    private var scheduleGap: Double { PaymentMath.scheduleGap(total: amount, installments: installments.map(\.amount)) }
 
     var body: some View {
         NavigationStack {
@@ -83,19 +57,7 @@ struct ExpenseEditorView: View {
                         Text("Taux : 1 $ = \(Fmt.number(rate, digits: 4)) € \(storedRate != nil && originalCurrency == currency ? "(taux de saisie)" : "(taux du jour)")")
                             .font(.caption).foregroundStyle(.secondary)
                     }
-                    Picker("Catégorie", selection: $categoryID) {
-                        Text("Aucune").tag(NSManagedObjectID?.none)
-                        ForEach(trip.categoryList, id: \.objectID) { cat in
-                            Label(cat.name ?? "", systemImage: cat.symbol ?? "tag").tag(NSManagedObjectID?.some(cat.objectID))
-                        }
-                    }
                     DatePicker("Date", selection: $date, displayedComponents: .date)
-                    Picker("Payé par", selection: $payerID) {
-                        Text("—").tag(NSManagedObjectID?.none)
-                        ForEach(trip.travelerList, id: \.objectID) { t in
-                            Text(t.wName).tag(NSManagedObjectID?.some(t.objectID))
-                        }
-                    }
                 }
 
                 if isPretax || tax > 0 || tip > 0 {
@@ -105,16 +67,7 @@ struct ExpenseEditorView: View {
                     }
                 }
 
-                Section {
-                    Toggle("Paiement en plusieurs fois", isOn: $useSchedule.animation())
-                    if !useSchedule {
-                        Toggle("Déjà payée", isOn: $isSettled)
-                    }
-                } footer: {
-                    if !useSchedule && !isSettled { Text("La dépense est comptée comme « prévue » jusqu'à ce qu'elle soit payée.") }
-                }
-
-                if useSchedule { scheduleSections }
+                PaymentSections(draft: $payment, amount: amount, currency: currency, date: date, trip: trip)
 
                 Section("Ticket et notes") {
                     TextField("Commerçant", text: $merchant)
@@ -165,66 +118,6 @@ struct ExpenseEditorView: View {
         }
     }
 
-    // MARK: Échéancier
-
-    @ViewBuilder
-    private var scheduleSections: some View {
-        Section {
-            HStack {
-                AmountField(title: "Acompte", text: $depositText, currency: depositIsPercent ? "%" : currency)
-            }
-            Toggle("Acompte en pourcentage", isOn: $depositIsPercent)
-            DatePicker("Date de l'acompte", selection: $depositDate, displayedComponents: .date)
-            Stepper("Solde en \(splitCount) fois", value: $splitCount, in: 1...24)
-            DatePicker("1er versement", selection: $firstInstallmentDate, displayedComponents: .date)
-            Button {
-                generateSchedule()
-            } label: {
-                Label("Répartir le solde en \(splitCount) fois égales", systemImage: "divide.circle")
-            }
-            .disabled(amount <= 0)
-        } header: {
-            Text("Préparer l'échéancier")
-        } footer: {
-            Text("Un versement par mois à partir du 1er versement. Le reliquat d'arrondi va sur le dernier.")
-        }
-
-        Section {
-            ForEach($installments) { $draft in
-                InstallmentDraftRow(draft: $draft, currency: currency, travelers: trip.travelerList, rate: rates.rate(for: currency))
-            }
-            .onDelete { installments.remove(atOffsets: $0) }
-            .onMove { installments.move(fromOffsets: $0, toOffset: $1) }
-            Button {
-                installments.append(InstallmentDraft(dueDate: installments.last?.dueDate.addingTimeInterval(30 * 86400) ?? Date()))
-            } label: {
-                Label("Ajouter un versement", systemImage: "plus.circle")
-            }
-        } header: {
-            Text("Versements")
-        } footer: {
-            if !installments.isEmpty && abs(scheduleGap) >= 0.01 {
-                Label("La somme des versements diffère du total de \(Fmt.money(abs(scheduleGap), currency)) (\(scheduleGap > 0 ? "il manque" : "en trop")).",
-                      systemImage: "exclamationmark.triangle.fill")
-                    .foregroundStyle(.orange)
-            } else if !installments.isEmpty {
-                Label("Échéancier cohérent avec le total.", systemImage: "checkmark.seal.fill").foregroundStyle(.green)
-            }
-        }
-    }
-
-    private func generateSchedule() {
-        let deposit = Money.parse(depositText)
-        let plan = PaymentMath.plan(total: amount, deposit: deposit, depositIsPercent: depositIsPercent, depositDate: depositDate,
-                                    count: splitCount, firstInstallmentDate: firstInstallmentDate)
-        // On conserve les versements déjà payés, on remplace le reste.
-        let paid = installments.filter(\.isPaid)
-        let fresh = plan.map { p in
-            InstallmentDraft(kind: p.kind, amountText: Fmt.number(p.amount), dueDate: p.dueDate, payerID: payerID)
-        }
-        installments = paid.isEmpty ? fresh : paid + fresh.filter { $0.kind == .installment }
-    }
-
     // MARK: Chargement / sauvegarde
 
     private func load() {
@@ -236,22 +129,14 @@ struct ExpenseEditorView: View {
             currency = expense.currencyCode
             originalCurrency = expense.currencyCode
             storedRate = expense.rateUsed
-            categoryID = expense.category?.objectID
             date = expense.date ?? Date()
-            payerID = expense.paidBy?.objectID
             merchant = expense.merchant ?? ""
             note = expense.note ?? ""
             isPretax = expense.isPretaxPrice
             tax = expense.taxAmount
             tip = expense.tipAmount
-            isSettled = expense.isSettled
             receipt = expense.receiptImage
-            installments = expense.installmentList.map { inst in
-                InstallmentDraft(objectID: inst.objectID, kind: inst.kind, amountText: Fmt.number(inst.amount),
-                                 dueDate: inst.dueDate ?? Date(), isPaid: inst.isPaid, paidDate: inst.paidDate,
-                                 paidRate: inst.paidRate, payerID: inst.payer?.objectID)
-            }
-            useSchedule = !installments.isEmpty
+            payment = PaymentDraft(expense: expense)
         } else if let prefill {
             title = prefill.title
             if let a = prefill.amount { amountText = Fmt.number(a) }
@@ -264,8 +149,8 @@ struct ExpenseEditorView: View {
             receipt = prefill.receipt
             reservationID = prefill.reservationID
             activityID = prefill.activityID
-            if let name = prefill.categoryName { categoryID = trip.category(named: name)?.objectID }
-            if prefill.reservationID != nil { isSettled = false }
+            if let name = prefill.categoryName { payment.categoryID = trip.category(named: name)?.objectID }
+            if prefill.reservationID != nil { payment.isSettled = false }
         }
     }
 
@@ -289,88 +174,16 @@ struct ExpenseEditorView: View {
         expense.taxAmount = tax
         expense.tipAmount = tip
         expense.receiptImage = receipt
-        expense.category = categoryID.flatMap { try? context.existingObject(with: $0) as? BudgetCategory }
-        expense.paidBy = payerID.flatMap { try? context.existingObject(with: $0) as? Traveler }
         if let reservationID, let reservation = try? context.existingObject(with: reservationID) as? Reservation {
             expense.reservation = reservation
         }
         if let activityID, let activity = try? context.existingObject(with: activityID) as? PlanActivity {
             expense.activity = activity
         }
-
-        // Échéancier
-        let keep = useSchedule ? installments : []
-        let keptIDs = Set(keep.compactMap(\.objectID))
-        for existing in expense.installmentList where !keptIDs.contains(existing.objectID) {
-            context.delete(existing)
-        }
-        for (index, draft) in keep.enumerated() {
-            let inst: PaymentInstallment
-            if let id = draft.objectID, let existing = try? context.existingObject(with: id) as? PaymentInstallment {
-                inst = existing
-            } else {
-                inst = context.make(PaymentInstallment.self, trip: trip)
-                inst.expense = expense
-            }
-            inst.kindRaw = draft.kind.rawValue
-            inst.amount = draft.amount
-            inst.dueDate = draft.dueDate
-            inst.sortIndex = Int32(index)
-            inst.payer = draft.payerID.flatMap { try? context.existingObject(with: $0) as? Traveler }
-            if draft.isPaid {
-                if !inst.isPaid || inst.paidAmountEUR == 0 || inst.amount != draft.amount {
-                    let payRate = currency == "EUR" ? 1 : (draft.paidRate > 0 ? draft.paidRate : rates.rate(for: currency))
-                    inst.markPaid(rateEURPerUnit: payRate, date: draft.paidDate ?? Date())
-                }
-            } else if inst.isPaid {
-                inst.markUnpaid()
-            }
-        }
-        expense.isSettled = useSchedule ? false : isSettled
+        PaymentSync.apply(payment, to: expense, currency: currency, trip: trip, rates: rates, context: context)
         context.saveIfNeeded()
         savedTick += 1
         dismiss()
-    }
-}
-
-/// Ligne d'un versement dans l'éditeur.
-struct InstallmentDraftRow: View {
-    @Binding var draft: InstallmentDraft
-    let currency: String
-    let travelers: [Traveler]
-    let rate: Double
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Picker("Type", selection: $draft.kind) {
-                    ForEach(InstallmentKind.allCases) { Text($0.label).tag($0) }
-                }
-                .labelsHidden()
-                .pickerStyle(.menu)
-                Spacer()
-                TextField("Montant", text: $draft.amountText)
-                    .keyboardType(.decimalPad)
-                    .multilineTextAlignment(.trailing)
-                    .frame(maxWidth: 120)
-                Text(currency == "EUR" ? "€" : "$").foregroundStyle(.secondary)
-            }
-            DatePicker("Échéance", selection: $draft.dueDate, displayedComponents: .date)
-            Picker("Payeur", selection: $draft.payerID) {
-                Text("—").tag(NSManagedObjectID?.none)
-                ForEach(travelers, id: \.objectID) { Text($0.wName).tag(NSManagedObjectID?.some($0.objectID)) }
-            }
-            Toggle(isOn: Binding(get: { draft.isPaid }, set: { paid in
-                draft.isPaid = paid
-                draft.paidDate = paid ? Date() : nil
-                draft.paidRate = paid ? (currency == "EUR" ? 1 : rate) : 0
-            })) {
-                let status = PaymentMath.status(isPaid: draft.isPaid, dueDate: draft.dueDate)
-                Text(status.label).foregroundStyle(status == .overdue ? Color.red : (status == .paid ? Color.green : Color.primary))
-            }
-            .sensoryFeedback(.success, trigger: draft.isPaid)
-        }
-        .padding(.vertical, 4)
     }
 }
 

@@ -75,7 +75,6 @@ struct RootView: View {
             await NotificationScheduler.requestAuthorization()
             await rates.refreshIfNeeded()
             await affluence.refresh()
-            await LiveActivityManager.refresh(context: context)
             WidgetSnapshotWriter.update(context: context)
             await NotificationScheduler.reschedule(context: context, settings: settings)
         }

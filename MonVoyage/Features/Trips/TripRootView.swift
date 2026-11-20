@@ -97,9 +97,12 @@ struct TripRootView: View {
             .navigationTitle(trip.wName)
             .toolbar { closeButton }
         } detail: {
+            // Une pile neuve par module : si un écran était ouvert par-dessus
+            // (détail d'une checklist, d'une réservation…), il est refermé au changement de module.
             NavigationStack {
                 moduleView(nav.module == .more ? .today : nav.module)
             }
+            .id(nav.module)
         }
     }
 

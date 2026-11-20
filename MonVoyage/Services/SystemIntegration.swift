@@ -1,7 +1,6 @@
 import Foundation
 import CoreData
 import WidgetKit
-import ActivityKit
 import BackgroundTasks
 
 // MARK: - Widget
@@ -35,59 +34,6 @@ enum WidgetSnapshotWriter {
         }
         snapshot.save()
         WidgetCenter.shared.reloadAllTimelines()
-    }
-}
-
-// MARK: - Live Activity
-
-@MainActor
-enum LiveActivityManager {
-    /// Démarre (ou met à jour) la Live Activity du jour : vol, sinon jour de parc.
-    static func refresh(context: NSManagedObjectContext, now: Date = Date()) async {
-        guard ActivityAuthorizationInfo().areActivitiesEnabled,
-              let trip = TripFactory.currentOrNextTrip(in: context, now: now) else { return }
-        guard let state = state(for: trip, now: now) else {
-            await endAll()
-            return
-        }
-        let endOfDay = DayKey.endOfDay(now)
-        let content = ActivityContent(state: state, staleDate: endOfDay)
-        if let existing = Activity<TripActivityAttributes>.activities.first {
-            await existing.update(content)
-            return
-        }
-        let attributes = TripActivityAttributes(tripName: trip.wName, accentHex: trip.accentHex ?? "#3A7BFF")
-        do {
-            _ = try Activity.request(attributes: attributes, content: content, pushType: nil)
-        } catch {
-            print("Live Activity impossible : \(error)")
-        }
-    }
-
-    static func state(for trip: Trip, now: Date) -> TripActivityAttributes.ContentState? {
-        let todayKey = DayKey.key(now)
-        if let flight = trip.flightSegments.first(where: { seg in
-            guard let dep = seg.departureDate else { return false }
-            return dep > now && DayKey.key(dep) == todayKey
-        }), let dep = flight.departureDate {
-            let detail = [flight.terminal.map { "Terminal \($0)" }, flight.seat.map { "Siège \($0)" }]
-                .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
-            return .init(kind: "flight", title: "\(flight.flightNumber ?? "Vol") \(flight.routeText)",
-                         subtitle: "Décollage \(Fmt.time(dep, timeZone: flight.departureZone))", targetDate: dep,
-                         detail: detail.isEmpty ? flight.displayAirline : detail)
-        }
-        if !trip.parks(on: todayKey).isEmpty,
-           let next = trip.activities(on: todayKey).first(where: { ($0.time ?? .distantPast) > now }), let time = next.time {
-            return .init(kind: "park", title: next.wTitle, subtitle: "À \(Fmt.time(time, timeZone: trip.tripTimeZone))",
-                         targetDate: time, detail: next.place ?? "")
-        }
-        return nil
-    }
-
-    static func endAll() async {
-        for activity in Activity<TripActivityAttributes>.activities {
-            await activity.end(nil, dismissalPolicy: .immediate)
-        }
     }
 }
 
