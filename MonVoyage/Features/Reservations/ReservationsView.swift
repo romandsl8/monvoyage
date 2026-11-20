@@ -6,10 +6,45 @@ import QuickLook
 struct ReservationsView: View {
     @ObservedObject var trip: Trip
     @EnvironmentObject private var nav: TripNavigation
+    @Environment(\.managedObjectContext) private var context
+
+    /// Dépenses de type vol / hôtel / billets saisies dans Budget, sans fiche réservation.
+    private var expensesWithoutReservation: [(expense: Expense, kind: ReservationKind)] {
+        trip.expenseList.compactMap { expense in
+            guard expense.reservation == nil, let kind = ReservationLink.kind(for: expense) else { return nil }
+            return (expense: expense, kind: kind)
+        }
+    }
 
     var body: some View {
         List {
-            if trip.reservationList.isEmpty {
+            let pending = expensesWithoutReservation
+            if !pending.isEmpty {
+                Section {
+                    ForEach(pending, id: \.expense.objectID) { item in
+                        Button {
+                            let reservation = ReservationLink.createReservation(for: item.expense, kind: item.kind, trip: trip, context: context)
+                            nav.present(.editReservation(reservation.objectID))
+                        } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: item.kind.symbol).foregroundStyle(Color.accentColor).frame(width: 28)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(item.expense.wTitle).foregroundStyle(.primary)
+                                    Text("\(item.kind.label) · \(Fmt.money(item.expense.amount, item.expense.currencyCode))")
+                                        .font(.caption).foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                Text("Compléter").font(.caption.weight(.semibold)).foregroundStyle(Color.accentColor)
+                            }
+                        }
+                    }
+                } header: {
+                    Text("À compléter")
+                } footer: {
+                    Text("Dépenses saisies dans le budget. Touchez-en une pour créer sa fiche (n° de confirmation, horaires de vol, documents) ; le budget et l'échéancier restent liés.")
+                }
+            }
+            if trip.reservationList.isEmpty && pending.isEmpty {
                 EmptyState(symbol: "doc.text", title: "Aucune réservation",
                            message: "Vols, hôtel, billets, assurance, ESTA… gardez tout au même endroit, même hors ligne.",
                            actionTitle: "Ajouter un vol") { nav.present(.newReservation(.flight)) }
@@ -204,5 +239,42 @@ enum AttachmentFiles {
         let url = dir.appendingPathComponent(fileName)
         try? data.write(to: url, options: .atomic)
         return url
+    }
+}
+
+/// Lien entre une dépense du budget et une fiche réservation.
+enum ReservationLink {
+    /// Type de réservation déduit de la catégorie (ou du libellé) de la dépense.
+    static func kind(for expense: Expense) -> ReservationKind? {
+        let category = (expense.category?.name ?? "").lowercased()
+        let title = expense.wTitle.lowercased()
+        // La catégorie prime (« Volcano Bay » en Billets parcs n'est pas un vol).
+        if category == "vols" { return .flight }
+        if category.contains("héberg") { return .hotel }
+        if category.contains("billet") || category.contains("express") { return .parkTicket }
+        if !category.isEmpty && !["divers", "transport"].contains(category) { return nil }
+        let words = Set(title.split(whereSeparator: { !$0.isLetter }).map(String.init))
+        if words.contains("vol") || words.contains("vols") || words.contains("avion") || words.contains("flight") { return .flight }
+        if words.contains("hôtel") || words.contains("hotel") || words.contains("airbnb") { return .hotel }
+        if words.contains("location") || words.contains("voiture") { return .rental }
+        if words.contains("assurance") { return .insurance }
+        if words.contains("esta") { return .esta }
+        return nil
+    }
+
+    /// Crée la fiche réservation d'une dépense existante (montant, devise, date, lien conservés).
+    @discardableResult
+    static func createReservation(for expense: Expense, kind: ReservationKind, trip: Trip, context: NSManagedObjectContext) -> Reservation {
+        let reservation = context.make(Reservation.self, trip: trip)
+        reservation.trip = trip
+        reservation.kindRaw = kind.rawValue
+        reservation.title = expense.wTitle
+        reservation.amount = expense.amount
+        reservation.currency = expense.currencyCode
+        reservation.startDate = expense.date
+        reservation.provider = expense.merchant
+        expense.reservation = reservation
+        context.saveIfNeeded()
+        return reservation
     }
 }

@@ -162,6 +162,31 @@ final class DataTests: XCTestCase {
         XCTAssertEqual(BudgetSummary(trip: trip).remainingEUR, 1450)
     }
 
+    /// Une dépense « Avion » saisie dans le budget peut recevoir sa fiche réservation.
+    func testExpenseBecomesReservation() throws {
+        let trip = makeTrip()
+        func expense(_ title: String, _ category: String?) -> Expense {
+            let e = context.make(Expense.self, trip: trip)
+            e.trip = trip
+            e.title = title
+            e.amount = 2000
+            e.amountEUR = 2000
+            e.category = category.flatMap { trip.category(named: $0) }
+            return e
+        }
+        let plane = expense("Avion", "Vols")
+        XCTAssertEqual(ReservationLink.kind(for: plane), .flight)
+        XCTAssertEqual(ReservationLink.kind(for: expense("Hôtel", nil)), .hotel)
+        XCTAssertEqual(ReservationLink.kind(for: expense("Volcano Bay", "Billets parcs")), .parkTicket)
+        XCTAssertNil(ReservationLink.kind(for: expense("Restaurant", "Repas")))
+        XCTAssertNil(ReservationLink.kind(for: expense("Restaurant", nil)))
+
+        let reservation = ReservationLink.createReservation(for: plane, kind: .flight, trip: trip, context: context)
+        XCTAssertEqual(reservation.expense, plane)
+        XCTAssertEqual(reservation.amount, 2000)
+        XCTAssertEqual(trip.reservationList.count, 1)
+    }
+
     /// Le moment choisi (avant / pendant) prime sur la catégorie.
     func testExpensePhase() {
         let trip = makeTrip()
