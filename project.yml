@@ -11,8 +11,8 @@
 #  WIDGET_BUNDLE_ID   bundle ID de l'extension widget
 #  ICLOUD_CONTAINER   conteneur iCloud (CloudKit)
 #  APP_GROUP_ID       App Group partagé appli <-> widget
-#  CLOUDKIT_ENV       Development (1er build, pour créer le schéma) ou Production
-#                     (Codemagic remplace cette valeur par sa variable CLOUDKIT_ENV)
+#  CLOUDKIT_ENV       Production (les builds TestFlight utilisent toujours Production ;
+#                     le schéma est créé par le workflow Codemagic « cloudkit-schema »)
 #  MARKETING_VERSION  version affichée (1.0, 1.1…). Le numéro de build est
 #                     calculé automatiquement par Codemagic.
 # =====================================================================
@@ -34,7 +34,7 @@ settings:
     WIDGET_BUNDLE_ID: fr.tanguy.monvoyage.widget
     ICLOUD_CONTAINER: iCloud.fr.tanguy.monvoyage
     APP_GROUP_ID: group.fr.tanguy.monvoyage
-    CLOUDKIT_ENV: Development
+    CLOUDKIT_ENV: Production
     MARKETING_VERSION: "1.0"
     CURRENT_PROJECT_VERSION: "1"
     VERSIONING_SYSTEM: apple-generic

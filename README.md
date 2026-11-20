@@ -71,24 +71,27 @@ MonVoyageTests/              Tests unitaires
    - créer une **nouvelle version** du modèle (`MonVoyage 2.xcdatamodel`) et la déclarer courante dans `.xccurrentversion` ;
    - **ajouter uniquement** des attributs optionnels ou avec valeur par défaut, ou de nouvelles entités ;
    - **ne jamais renommer ni supprimer** une entité, un attribut ou une relation déjà publiés ;
-   - après le build, **redéployer le schéma CloudKit** (Development → Production) avant de publier la version.
+   - avant de publier la version, relancer le workflow Codemagic **« Schéma CloudKit → Development »** puis **déployer** le schéma vers Production dans la console CloudKit.
 5. Export / import `.zip` (JSON + pièces jointes) d'un voyage ou de tous, via la feuille de partage. L'import recrée à l'identique avec de nouveaux UUID. Rappel discret après 30 jours sans export.
 
 ---
 
 ## Partage CloudKit et TestFlight
 
-Les builds TestFlight utilisent l'environnement CloudKit **Production**, vide tant que le schéma n'y est pas déployé.
-L'entitlement `com.apple.developer.icloud-container-environment` est piloté par `CLOUDKIT_ENV` (dans `project.yml`, remplacé par la variable de `codemagic.yaml`).
+Les builds TestFlight utilisent **toujours** l'environnement CloudKit **Production**, quel que soit l'entitlement
+`com.apple.developer.icloud-container-environment` (vérifié sur le premier build : « Cannot create new type … in production schema »).
+Le schéma ne peut donc pas être créé depuis l'appli (`initializeCloudKitSchema()` ne marche qu'en Development).
 
-Procédure (validée : un build signé App Store peut cibler l'environnement Development grâce à cet entitlement) :
-1. 1er build avec `CLOUDKIT_ENV = Development` ;
-2. dans l'appli : Réglages → 5 appuis sur la version → « Initialiser le schéma CloudKit » (`initializeCloudKitSchema()`) ;
-3. [console CloudKit](https://icloud.developer.apple.com) (navigateur, pas besoin de Mac) → *Deploy Schema Changes* vers Production ;
-4. passer `CLOUDKIT_ENV` à `Production` et relancer un build.
+Procédure sans Mac :
+1. `scripts/make_cloudkit_schema.py` génère le schéma (`.ckdb`) à partir de la version courante du modèle Core Data,
+   selon la correspondance de `NSPersistentCloudKitContainer` (`CD_<Entité>`, `CD_<attribut>`, relations to-one en `STRING`,
+   `CD_entityName`, `CD_moveReceipt`, `CD_<attribut>_ckAsset`).
+2. Le workflow Codemagic **« Schéma CloudKit → Development »** (lancé à la main) l'importe avec `xcrun cktool import-schema`
+   dans l'environnement Development, grâce à un jeton de gestion CloudKit (`CLOUDKIT_MANAGEMENT_TOKEN`).
+3. [Console CloudKit](https://icloud.developer.apple.com) → *Deploy Schema Changes* vers Production.
 
-Alternative si le bouton échoue : avec le build Development, créer un voyage, une dépense de chaque type et partager un voyage
-(CloudKit crée le schéma « à la volée » en Development), puis déployer de la même façon.
+Si un champ manquait, l'appli l'indiquerait avec son nom exact dans l'écran caché (Réglages → 5 appuis sur la version) ;
+il suffit alors de compléter le script et de relancer les étapes 2 et 3.
 
 ---
 

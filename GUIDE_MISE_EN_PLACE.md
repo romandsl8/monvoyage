@@ -181,7 +181,7 @@ Codemagic a besoin d'une clé privée pour créer/réutiliser votre certificat d
    - **Variable name** : `CERTIFICATE_PRIVATE_KEY` ; **Variable value** : la clé de l'étape 4.3 ; **Group** : tapez `monvoyage_signing` (création du groupe) ; cochez **Secret** → **Add**.
 4. Vérifiez dans `codemagic.yaml` (section `vars`) :
    - `APP_STORE_APPLE_ID` = l'identifiant numérique de l'étape 3 ;
-   - `CLOUDKIT_ENV: Development` (pour ce premier build) ;
+   - `CLOUDKIT_ENV: Production` ;
    - `app_store_connect:` = le nom de votre clé (4.2).
 5. Lancez : bouton **Start new build** → Branch `main` → Workflow `MonVoyage → TestFlight` → **Start new build**.
    (Ensuite, chaque `push` sur `main` lance un build automatiquement.)
@@ -191,23 +191,28 @@ Codemagic a besoin d'une clé privée pour créer/réutiliser votre certificat d
 
 ---
 
-## 6. Premier build et schéma CloudKit (une seule fois)
+## 6. Schéma CloudKit (une fois, puis après chaque changement du modèle)
 
-Pourquoi : TestFlight utilise l'environnement iCloud **Production**, vide au départ. On crée la structure (le « schéma ») en **Development**, puis on la déploie en Production.
+Pourquoi : les builds TestFlight utilisent **toujours** l'environnement iCloud **Production**, vide au départ, et l'appli ne peut pas y créer la structure (le « schéma »). Codemagic (qui tourne sur Mac) importe le schéma dans l'environnement **Development** avec l'outil d'Apple `cktool`, puis vous le déployez en Production depuis la console web.
 
-1. Sur **votre** iPhone, ouvrez **TestFlight** → **MonVoyage** → **Installer**.
-2. Vérifiez **Réglages iPhone → [votre nom] → iCloud** : vous êtes connecté, et iCloud est actif.
-3. Ouvrez MonVoyage → **Réglages** (roue dentée en haut à gauche) → appuyez **5 fois** sur la ligne **Version** → écran **CloudKit** → **Initialiser le schéma CloudKit**. Patientez jusqu'au message « Schéma envoyé… » (jusqu'à 1 min).
-4. Sur un ordinateur : **https://icloud.developer.apple.com** → **CloudKit Database** → choisissez le conteneur `iCloud.fr.tanguy.monvoyage`.
-5. En haut, environnement **Development** : dans **Schema → Record Types**, vous devez voir des types `CD_Trip`, `CD_Expense`, etc. ✅
-6. Cliquez **Deploy Schema Changes…** (en bas à gauche ou dans le menu du conteneur) → vérifiez la liste → **Deploy**.
-7. Basculez l'environnement sur **Production** : les mêmes `CD_…` apparaissent. ✅
-8. Dans `codemagic.yaml`, passez `CLOUDKIT_ENV: Production`, commitez et poussez (ou demandez à Claude Code : « passe CLOUDKIT_ENV en Production et pousse »). Un nouveau build part.
-9. Installez ce nouveau build via TestFlight. **C'est celui-ci que vous utiliserez au quotidien.**
+### 6.1 Jeton de gestion CloudKit et identifiant d'équipe
+1. **Team ID** : https://developer.apple.com/account → section **Détails de l'abonnement** (*Membership details*) → **Identifiant d'équipe** (*Team ID*), 10 caractères (ex. `AB12CD34EF`). Notez-le.
+2. **Jeton** : https://icloud.developer.apple.com → en haut à droite, menu de votre compte (ou icône ☰) → **Settings** / **Tokens & Keys** → section **CloudKit Management Tokens** (*Manage Tokens*) → **+** → nom `Codemagic` → **Create** → **copiez** le jeton (affiché une seule fois).
+3. Codemagic → votre appli → onglet **Environment variables** :
+   - `CLOUDKIT_MANAGEMENT_TOKEN` = le jeton ; **Group** : `monvoyage_cloudkit` (création) ; cochez **Secret** → **Add** ;
+   - `CLOUDKIT_TEAM_ID` = votre Team ID ; **Group** : `monvoyage_cloudkit` → **Add**.
 
-> Si le bouton affiche une erreur : avec le build Development, créez un voyage, une dépense avec échéancier, une checklist, une réservation avec pièce jointe et partagez un voyage, puis faites les points 4 à 9 (CloudKit crée alors le schéma « à la volée »). 🔁 Envoyez le message d'erreur à Claude Code.
+### 6.2 Importer le schéma
+1. Codemagic → **Start new build** → Branch `main` → Workflow **Schéma CloudKit → Development** → **Start new build** (2 à 5 min).
+2. ✅ Toutes les étapes vertes. 🔁 Si une étape est rouge, envoyez à Claude Code son nom et ses dernières lignes.
 
-> ⚠️ Les données saisies avec le build **Development** restent dans l'environnement Development : elles n'apparaîtront pas dans le build Production. Ne saisissez rien d'important avant l'étape 9.
+### 6.3 Déployer en Production
+1. https://icloud.developer.apple.com → **CloudKit Database** → conteneur `iCloud.fr.tanguy.monvoyage` → environnement **Development** → **Schema → Record Types** : vous voyez `CD_Trip`, `CD_Expense`, etc. ✅
+2. **Deploy Schema Changes…** (bas du menu de gauche) → vérifiez la liste → **Deploy**.
+3. Basculez sur **Production** : les mêmes `CD_…` apparaissent. ✅
+
+### 6.4 Vérifier dans l'appli
+Installez le dernier build via TestFlight → Réglages de l'appli → 5 appuis sur **Version** → écran CloudKit. Créez un voyage, attendez une minute : dans la console, **Production → Records**, zone `com.apple.coredata.cloudkit.zone`, des enregistrements `CD_Trip` apparaissent. 🔁 Si l'appli signale un champ manquant, envoyez le message à Claude Code (le bouton « Initialiser le schéma » de cet écran ne sert pas en TestFlight).
 
 ---
 
@@ -235,7 +240,7 @@ Pour **arrêter le partage** (propriétaire) ou **quitter** (invité) : même é
 3. Codemagic se lance tout seul : tests → build (numéro incrémenté automatiquement) → TestFlight.
 4. Sur les iPhone : TestFlight → **Mettre à jour**. Les données restent (elles sont dans l'iPhone et dans iCloud).
 
-**Règle d'or des données** (rappelez-la à Claude Code si besoin) : dans le modèle Core Data, on **ajoute** uniquement des attributs optionnels ou avec valeur par défaut, dans une **nouvelle version** du modèle ; on ne **renomme** et on ne **supprime** jamais une entité ou un attribut déjà publiés. Après un changement de modèle : refaire l'étape 6 (build Development → bouton → déploiement du schéma → build Production).
+**Règle d'or des données** (rappelez-la à Claude Code si besoin) : dans le modèle Core Data, on **ajoute** uniquement des attributs optionnels ou avec valeur par défaut, dans une **nouvelle version** du modèle ; on ne **renomme** et on ne **supprime** jamais une entité ou un attribut déjà publiés. Après un changement de modèle : refaire les étapes 6.2 et 6.3 (workflow « Schéma CloudKit » puis déploiement).
 
 Pensez à **exporter** vos voyages de temps en temps (liste des voyages → **+** → *Exporter tous les voyages* → *Enregistrer dans Fichiers*).
 
@@ -258,7 +263,7 @@ Pensez à **exporter** vos voyages de temps en temps (liste des voyages → **+*
 | `Authentication failed` / `integration … not found` | Nom de clé API différent dans `codemagic.yaml` | Mettre exactement le nom saisi à l'étape 4.2 |
 | `** TEST FAILED **` | Un test unitaire échoue | Envoyer `xcodebuild-test.log` à Claude Code |
 | Dans l'appli : le partage échoue, rien ne se synchronise entre les iPhone | Schéma CloudKit pas déployé en Production | Refaire l'étape 6 (points 4 à 9) |
-| Échec du bouton « Initialiser le schéma » | Build compilé en Production | Vérifier `CLOUDKIT_ENV: Development` dans `codemagic.yaml` pour ce build |
+| Workflow « Schéma CloudKit » : `authentication` / `401` | Jeton ou Team ID incorrect | Recréer le jeton (6.1) et vérifier `CLOUDKIT_TEAM_ID` |
 | App Store Connect : « Le nom de l'app est déjà utilisé » | Nom pris sur l'App Store | Choisir une variante (étape 3, point 3) ; le nom sous l'icône reste MonVoyage |
 | Build « Invalid Binary » / mail d'Apple après envoi | Problème d'Info.plist ou d'icône | Envoyer le contenu du mail à Claude Code |
 

@@ -9,8 +9,8 @@
 #    (App Store Connect > l'appli > Informations sur l'app > Identifiant Apple).
 #  - groupe de variables « monvoyage_signing » (dans l'interface Codemagic)
 #    contenant CERTIFICATE_PRIVATE_KEY (secret).
-#  - vars.CLOUDKIT_ENV : Development pour le 1er build (création du schéma),
-#    puis Production.
+#  - groupe « monvoyage_cloudkit » : CLOUDKIT_MANAGEMENT_TOKEN (secret) et
+#    CLOUDKIT_TEAM_ID, pour le workflow « cloudkit-schema » (import du schéma).
 #
 #  Les identifiants (bundle IDs, conteneur iCloud, App Group) doivent être
 #  identiques à ceux en haut de project.yml.
@@ -35,7 +35,7 @@ workflows:
         ICLOUD_CONTAINER: iCloud.fr.tanguy.monvoyage
         APP_GROUP_ID: group.fr.tanguy.monvoyage
         APP_STORE_APPLE_ID: "6837239666"
-        CLOUDKIT_ENV: Development             # ← Production après déploiement du schéma
+        CLOUDKIT_ENV: Production              # TestFlight utilise toujours Production
         XCODE_PROJECT: MonVoyage.xcodeproj
         XCODE_SCHEME: MonVoyage
         # NOTIFY_EMAIL: vous@example.com      # facultatif (voir publishing.email)
@@ -135,3 +135,53 @@ workflows:
       #   notify:
       #     success: true
       #     failure: true
+
+  # -------------------------------------------------------------------
+  #  Schéma CloudKit : à lancer À LA MAIN, une fois au départ puis après
+  #  chaque changement du modèle Core Data.
+  #  Génère le schéma depuis le modèle, l'importe dans l'environnement
+  #  Development ; il reste à le déployer vers Production dans la console
+  #  CloudKit (« Deploy Schema Changes »).
+  # -------------------------------------------------------------------
+  cloudkit-schema:
+    name: Schéma CloudKit → Development
+    instance_type: mac_mini_m2
+    max_build_duration: 20
+    environment:
+      xcode: "27.2"
+      groups:
+        - monvoyage_cloudkit         # CLOUDKIT_MANAGEMENT_TOKEN (secret), CLOUDKIT_TEAM_ID
+      vars:
+        ICLOUD_CONTAINER: iCloud.fr.tanguy.monvoyage
+    scripts:
+      - name: Générer le schéma depuis le modèle Core Data
+        script: |
+          set -e
+          python3 scripts/make_cloudkit_schema.py build/cloudkit-schema.ckdb
+          cat build/cloudkit-schema.ckdb
+      - name: Sauvegarder le schéma actuel (Development)
+        script: |
+          set -e
+          xcrun cktool export-schema \
+            --team-id "$CLOUDKIT_TEAM_ID" \
+            --container-id "$ICLOUD_CONTAINER" \
+            --environment development \
+            --output-file build/schema-avant.ckdb
+          cat build/schema-avant.ckdb
+      - name: Valider puis importer dans Development
+        script: |
+          set -e
+          xcrun cktool import-schema \
+            --team-id "$CLOUDKIT_TEAM_ID" \
+            --container-id "$ICLOUD_CONTAINER" \
+            --environment development \
+            --validate \
+            --file build/cloudkit-schema.ckdb
+          xcrun cktool export-schema \
+            --team-id "$CLOUDKIT_TEAM_ID" \
+            --container-id "$ICLOUD_CONTAINER" \
+            --environment development \
+            --output-file build/schema-apres.ckdb
+          echo "Import terminé. Déployez maintenant vers Production dans la console CloudKit."
+    artifacts:
+      - build/*.ckdb
