@@ -162,6 +162,38 @@ final class DataTests: XCTestCase {
         XCTAssertEqual(BudgetSummary(trip: trip).remainingEUR, 1450)
     }
 
+    /// Hôtel 1 000 $ : acompte de 100 $ saisi puis enregistré sans « Répartir ».
+    /// L'échéancier est créé, l'acompte est payé, seuls les 900 $ restants sont à payer.
+    @MainActor
+    func testDepositEnteredWithoutSplitting() throws {
+        let trip = makeTrip()
+        let hotel = context.make(Expense.self, trip: trip)
+        hotel.trip = trip
+        hotel.title = "Hôtel"
+        hotel.amount = 1000
+        hotel.currency = "USD"
+        hotel.rateUsed = 0.9
+        hotel.amountEUR = 900
+        var draft = PaymentDraft()
+        draft.useSchedule = true
+        draft.depositText = "100"
+        draft.splitCount = 1
+        PaymentSync.apply(draft, to: hotel, currency: "USD", trip: trip, rates: .shared, context: context)
+
+        XCTAssertEqual(hotel.installmentList.count, 2)
+        XCTAssertEqual(hotel.installmentList.first?.kind, .deposit)
+        XCTAssertTrue(hotel.installmentList.first?.isPaid == true)
+        XCTAssertEqual(hotel.status, .partial)
+        let due = DueItem.all(for: trip, includePaid: false)
+        XCTAssertEqual(due.map(\.amount), [900])
+
+        // Supprimer la réservation supprime aussi sa dépense.
+        let reservation = ReservationLink.createReservation(for: hotel, kind: .hotel, trip: trip, context: context)
+        ReservationLink.delete(reservation, keepExpense: false, context: context)
+        XCTAssertTrue(trip.expenseList.isEmpty)
+        XCTAssertTrue(trip.reservationList.isEmpty)
+    }
+
     /// Une dépense « Avion » saisie dans le budget peut recevoir sa fiche réservation.
     func testExpenseBecomesReservation() throws {
         let trip = makeTrip()

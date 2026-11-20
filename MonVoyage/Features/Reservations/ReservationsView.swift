@@ -7,11 +7,14 @@ struct ReservationsView: View {
     @ObservedObject var trip: Trip
     @EnvironmentObject private var nav: TripNavigation
     @Environment(\.managedObjectContext) private var context
+    @State private var expenseToDelete: Expense?
+    @State private var refreshTick = 0
 
     /// Dépenses de type vol / hôtel / billets saisies dans Budget, sans fiche réservation.
     private var expensesWithoutReservation: [(expense: Expense, kind: ReservationKind)] {
         trip.expenseList.compactMap { expense in
-            guard expense.reservation == nil, let kind = ReservationLink.kind(for: expense) else { return nil }
+            guard expense.reservation == nil, !ReservationLink.isDismissed(expense),
+                  let kind = ReservationLink.kind(for: expense) else { return nil }
             return (expense: expense, kind: kind)
         }
     }
@@ -37,12 +40,25 @@ struct ReservationsView: View {
                                 Text("Compléter").font(.caption.weight(.semibold)).foregroundStyle(Color.accentColor)
                             }
                         }
+                        .swipeActions(edge: .trailing) {
+                            Button(role: .destructive) { expenseToDelete = item.expense } label: {
+                                Label("Supprimer", systemImage: "trash")
+                            }
+                            Button {
+                                ReservationLink.dismissedKeys.insert(ReservationLink.key(for: item.expense))
+                                refreshTick += 1
+                            } label: {
+                                Label("Ignorer", systemImage: "eye.slash")
+                            }
+                            .tint(.gray)
+                        }
                     }
                 } header: {
                     Text("À compléter")
                 } footer: {
-                    Text("Dépenses saisies dans le budget. Touchez-en une pour créer sa fiche (n° de confirmation, horaires de vol, documents) ; le budget et l'échéancier restent liés.")
+                    Text("Dépenses saisies dans le budget. Touchez-en une pour créer sa fiche (n° de confirmation, horaires de vol, documents) ; le budget et l'échéancier restent liés. Balayez vers la gauche pour la supprimer ou l'ignorer.")
                 }
+                .id(refreshTick)
             }
             if trip.reservationList.isEmpty && pending.isEmpty {
                 EmptyState(symbol: "doc.text", title: "Aucune réservation",
@@ -66,6 +82,19 @@ struct ReservationsView: View {
             }
         }
         .navigationTitle("Réservations")
+        .confirmationDialog("Supprimer cette dépense ?",
+                            isPresented: Binding(get: { expenseToDelete != nil }, set: { if !$0 { expenseToDelete = nil } }),
+                            titleVisibility: .visible) {
+            Button("Supprimer la dépense", role: .destructive) {
+                if let expense = expenseToDelete {
+                    context.delete(expense)
+                    context.saveIfNeeded()
+                }
+                expenseToDelete = nil
+            }
+        } message: {
+            Text("Elle sera retirée du budget et des échéances, avec ses versements.")
+        }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
@@ -260,6 +289,37 @@ enum ReservationLink {
         if words.contains("assurance") { return .insurance }
         if words.contains("esta") { return .esta }
         return nil
+    }
+
+    /// Supprime une réservation et, sauf demande contraire, la dépense liée (et ses versements).
+    /// Si la dépense est gardée, elle est marquée comme « sans fiche voulue » pour ne plus
+    /// réapparaître dans « À compléter ».
+    static func delete(_ reservation: Reservation, keepExpense: Bool, context: NSManagedObjectContext) {
+        if let expense = reservation.expense {
+            if keepExpense {
+                expense.reservation = nil
+                dismissedKeys.insert(key(for: expense))
+            } else {
+                context.delete(expense)
+            }
+        }
+        context.delete(reservation)
+        context.saveIfNeeded()
+    }
+
+    /// Dépenses volontairement gardées sans fiche (stocké sur l'iPhone).
+    private static let dismissedDefaultsKey = "reservationLinkDismissed"
+    static var dismissedKeys: Set<String> {
+        get { Set(UserDefaults.standard.stringArray(forKey: dismissedDefaultsKey) ?? []) }
+        set { UserDefaults.standard.set(Array(newValue), forKey: dismissedDefaultsKey) }
+    }
+
+    static func key(for expense: Expense) -> String {
+        expense.id?.uuidString ?? expense.objectID.uriRepresentation().absoluteString
+    }
+
+    static func isDismissed(_ expense: Expense) -> Bool {
+        dismissedKeys.contains(key(for: expense))
     }
 
     /// Crée la fiche réservation d'une dépense existante (montant, devise, date, lien conservés).

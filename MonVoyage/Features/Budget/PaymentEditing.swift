@@ -32,6 +32,8 @@ struct PaymentDraft: Equatable {
     var depositText = ""
     var depositIsPercent = false
     var depositDate = Date()
+    /// L'acompte est en général réglé à la réservation.
+    var depositPaid = true
     var splitCount = 3
     var firstInstallmentDate = Date().addingTimeInterval(30 * 86400)
 
@@ -57,14 +59,31 @@ struct PaymentDraft: Equatable {
     }
 
     /// « Répartir le solde en N fois égales » (les versements déjà payés sont conservés).
-    mutating func generateSchedule(total: Double) {
-        let plan = PaymentMath.plan(total: total, deposit: Money.parse(depositText), depositIsPercent: depositIsPercent,
-                                    depositDate: depositDate, count: splitCount, firstInstallmentDate: firstInstallmentDate)
+    /// `rate` : taux EUR pour 1 unité, utilisé si l'acompte est marqué payé.
+    mutating func generateSchedule(total: Double, rate: Double = 1) {
         let paid = installments.filter(\.isPaid)
-        let fresh = plan.map { p in
-            InstallmentDraft(kind: p.kind, amountText: Fmt.number(p.amount), dueDate: p.dueDate, payerID: payerID)
+        let alreadyPaid = paid.reduce(0) { $0 + $1.amount }
+        // Les versements déjà payés sont gardés : on ne replanifie que ce qui reste à payer.
+        let plan = PaymentMath.plan(total: Money.round2(total - alreadyPaid),
+                                    deposit: paid.isEmpty ? Money.parse(depositText) : nil,
+                                    depositIsPercent: depositIsPercent, depositDate: depositDate,
+                                    count: splitCount, firstInstallmentDate: firstInstallmentDate)
+        let fresh = plan.map { p -> InstallmentDraft in
+            var item = InstallmentDraft(kind: p.kind, amountText: Fmt.number(p.amount), dueDate: p.dueDate, payerID: payerID)
+            if p.kind == .deposit && depositPaid {
+                item.isPaid = true
+                item.paidDate = depositDate
+                item.paidRate = rate
+            }
+            return item
         }
-        installments = paid.isEmpty ? fresh : paid + fresh.filter { $0.kind == .installment }
+        installments = paid + fresh
+    }
+
+    /// Montant d'acompte saisi (montant ou %), 0 si aucun.
+    func depositAmount(total: Double) -> Double {
+        guard let value = Money.parse(depositText), value > 0 else { return 0 }
+        return Money.round2(depositIsPercent ? total * value / 100 : value)
     }
 }
 
@@ -121,10 +140,11 @@ struct PaymentSections: View {
                 AmountField(title: "Acompte", text: $draft.depositText, currency: draft.depositIsPercent ? "%" : currency)
                 Toggle("Acompte en pourcentage", isOn: $draft.depositIsPercent)
                 DatePicker("Date de l'acompte", selection: $draft.depositDate, displayedComponents: .date)
+                Toggle("Acompte déjà payé", isOn: $draft.depositPaid)
                 Stepper("Solde en \(draft.splitCount) fois", value: $draft.splitCount, in: 1...24)
                 DatePicker("1er versement", selection: $draft.firstInstallmentDate, displayedComponents: .date)
                 Button {
-                    draft.generateSchedule(total: amount)
+                    draft.generateSchedule(total: amount, rate: currency == "EUR" ? 1 : rates.rate(for: currency))
                 } label: {
                     Label("Répartir le solde en \(draft.splitCount) fois égales", systemImage: "divide.circle")
                 }
@@ -171,8 +191,13 @@ struct PaymentSections: View {
 /// Écrit le brouillon de paiement dans une dépense (catégorie, moment, versements).
 enum PaymentSync {
     @MainActor
-    static func apply(_ draft: PaymentDraft, to expense: Expense, currency: String, trip: Trip,
+    static func apply(_ source: PaymentDraft, to expense: Expense, currency: String, trip: Trip,
                       rates: ExchangeRateService, context: NSManagedObjectContext) {
+        var draft = source
+        // Acompte saisi sans avoir touché « Répartir » : l'échéancier est créé automatiquement.
+        if draft.useSchedule && draft.installments.isEmpty && expense.amount > 0 {
+            draft.generateSchedule(total: expense.amount, rate: currency == "EUR" ? 1 : rates.rate(for: currency))
+        }
         expense.category = draft.categoryID.flatMap { try? context.existingObject(with: $0) as? BudgetCategory }
         expense.paidBy = draft.payerID.flatMap { try? context.existingObject(with: $0) as? Traveler }
         expense.phaseRaw = (draft.phase == .auto ? ExpensePhase.duringTrip : draft.phase).rawValue

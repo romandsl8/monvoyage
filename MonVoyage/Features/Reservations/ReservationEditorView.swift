@@ -200,10 +200,20 @@ struct ReservationEditorView: View {
             }
             .quickLookPreview($previewURL)
             .confirmationDialog("Supprimer cette réservation ?", isPresented: $confirmDelete, titleVisibility: .visible) {
-                Button("Supprimer", role: .destructive) {
-                    if let reservationID, let r = try? context.existingObject(with: reservationID) { context.delete(r); context.saveIfNeeded() }
+                Button("Supprimer la réservation et sa dépense", role: .destructive) {
+                    if let reservationID, let r = try? context.existingObject(with: reservationID) as? Reservation {
+                        ReservationLink.delete(r, keepExpense: false, context: context)
+                    }
                     dismiss()
                 }
+                Button("Supprimer seulement la fiche") {
+                    if let reservationID, let r = try? context.existingObject(with: reservationID) as? Reservation {
+                        ReservationLink.delete(r, keepExpense: true, context: context)
+                    }
+                    dismiss()
+                }
+            } message: {
+                Text("La dépense liée et son échéancier seront retirés du budget, sauf si vous ne supprimez que la fiche.")
             }
         }
     }
