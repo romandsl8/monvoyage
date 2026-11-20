@@ -128,9 +128,6 @@ workflows:
       app_store_connect:
         auth: integration
         submit_to_testflight: true
-        beta_build_localizations:
-          - locale: fr-FR
-            whats_to_test: "Nouvelle version de MonVoyage. Vérifiez le budget, le planning, le partage du voyage et les widgets."
       # Notification par email (facultatif) : décommentez et mettez votre adresse.
       # email:
       #   recipients:
