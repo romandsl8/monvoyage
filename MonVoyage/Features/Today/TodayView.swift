@@ -1,0 +1,228 @@
+import SwiftUI
+import CoreData
+
+/// Vue « Aujourd'hui » : tout ce qui compte pendant le voyage, sur un seul écran.
+/// Avant le départ : compte à rebours et préparation.
+struct TodayView: View {
+    @ObservedObject var trip: Trip
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    @Environment(\.managedObjectContext) private var context
+    @EnvironmentObject private var nav: TripNavigation
+    @EnvironmentObject private var rates: ExchangeRateService
+    @EnvironmentObject private var weather: WeatherService
+    @EnvironmentObject private var affluence: AffluenceService
+    @EnvironmentObject private var queueTimes: QueueTimesService
+
+    private var todayKey: String { DayKey.key(Date()) }
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 60)) { timeline in
+            ScrollView {
+                VStack(spacing: 16) {
+                    header(now: timeline.date)
+                    LazyVGrid(columns: columns, alignment: .leading, spacing: 16) {
+                        cards(now: timeline.date)
+                    }
+                }
+                .padding()
+                .frame(maxWidth: 1100)
+                .frame(maxWidth: .infinity)
+            }
+        }
+        .groupedBackground()
+        .navigationTitle(trip.wName)
+        .refreshable { await refresh(force: true) }
+        .task { await refresh(force: false) }
+        .overlay(alignment: .bottomTrailing) {
+            FloatingAddButton(label: "Ajouter une dépense") {
+                nav.present(.newExpense(ExpensePrefill(currency: trip.isOngoing() ? trip.currencyCode : "EUR")))
+            }
+        }
+    }
+
+    private var columns: [GridItem] {
+        sizeClass == .regular ? [GridItem(.flexible(), spacing: 16, alignment: .top), GridItem(.flexible(), spacing: 16, alignment: .top)] : [GridItem(.flexible())]
+    }
+
+    // MARK: En-tête
+
+    @ViewBuilder
+    private func header(now: Date) -> some View {
+        Card {
+            HStack(alignment: .center) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(Fmt.longDay(now, timeZone: trip.tripTimeZone).capitalized).font(.title2.bold()).fontDesign(.rounded)
+                    if let city = trip.city { Text(city).foregroundStyle(.secondary) }
+                }
+                Spacer()
+                if !trip.isOngoing(now: now), let days = trip.daysUntilDeparture(now: now), days >= 0 {
+                    VStack {
+                        Text("J-\(days)").font(.system(size: 40, weight: .bold, design: .rounded)).foregroundStyle(trip.accent)
+                        Text("avant le départ").font(.caption).foregroundStyle(.secondary)
+                    }
+                    .accessibilityElement(children: .combine)
+                } else if trip.isOngoing(now: now), let index = trip.dayKeys.firstIndex(of: DayKey.key(now)) {
+                    GlassChip(text: "Jour \(index + 1)/\(trip.dayKeys.count)", symbol: "calendar", tint: trip.accent)
+                }
+            }
+            let alerts = DocumentAlerts.allAlerts(trip: trip)
+            if !alerts.isEmpty && !trip.isFinished(now: now) {
+                ForEach(alerts, id: \.self) { alert in
+                    Label(alert, systemImage: "exclamationmark.triangle.fill").font(.caption).foregroundStyle(.orange)
+                }
+            }
+        }
+    }
+
+    // MARK: Cartes
+
+    @ViewBuilder
+    private func cards(now: Date) -> some View {
+        nextActivitiesCard(now: now)
+        weatherCard(now: now)
+        if !trip.parks(on: DayKey.key(now)).isEmpty { parksCard(now: now) }
+        dailyBudgetCard(now: now)
+        todayExpensesCard(now: now)
+        upcomingCard(now: now)
+    }
+
+    private func nextActivitiesCard(now: Date) -> some View {
+        let upcoming = trip.activityList.filter { ($0.time ?? .distantPast) > now }.prefix(2)
+        let nextFlight = trip.flightSegments.first { ($0.departureDate ?? .distantPast) > now }
+        return Card {
+            CardTitle(title: "À suivre", symbol: "clock.fill", tint: trip.accent)
+            if let flight = nextFlight, let dep = flight.departureDate, dep.timeIntervalSince(now) < 2 * 86400 {
+                FlightLine(segment: flight)
+                Text("Décollage dans ") + Text(dep, style: .relative)
+            }
+            if upcoming.isEmpty && nextFlight == nil {
+                Text("Rien de prévu. Ajoutez des activités dans le planning.").font(.subheadline).foregroundStyle(.secondary)
+            }
+            ForEach(Array(upcoming), id: \.objectID) { activity in
+                VStack(alignment: .leading, spacing: 2) {
+                    ActivityLine(activity: activity, timeZone: trip.tripTimeZone)
+                    if let day = activity.day, activity.dayKey != DayKey.key(now) {
+                        Text(Fmt.day(day)).font(.caption2).foregroundStyle(.secondary).padding(.leading, 58)
+                    }
+                }
+                .onTapGesture { nav.present(.editActivity(activity.objectID)) }
+            }
+        }
+    }
+
+    private func weatherCard(now: Date) -> some View {
+        let key = trip.dayKeys.contains(DayKey.key(now)) ? DayKey.key(now) : (trip.dayKeys.first ?? DayKey.key(now))
+        return Card {
+            CardTitle(title: key == DayKey.key(now) ? "Météo du jour" : "Météo du premier jour", symbol: "cloud.sun.fill", tint: trip.accent)
+            if let id = trip.id?.uuidString, let w = weather.weather(tripKey: id, dayKey: key) {
+                WeatherBadge(weather: w, updatedAt: weather.updatedAt(tripKey: id))
+            } else {
+                Text("Météo indisponible (hors ligne ou destination non renseignée).").font(.subheadline).foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private func parksCard(now: Date) -> some View {
+        let key = DayKey.key(now)
+        let parks = trip.parks(on: key)
+        return Card {
+            CardTitle(title: "Parcs du jour", symbol: "sparkles", tint: trip.accent)
+            ForEach(parks, id: \.objectID) { park in
+                CrowdBadge(park: park, info: affluence.info(park: park, dayKey: key))
+                let remaining = park.attractionList.filter { $0.doneDate == nil && $0.assignedDay.map { DayKey.key($0) } == key }
+                let waits = queueTimes.waitTimes[park.queueTimesID] ?? queueTimes.cachedWaits(parkID: park.queueTimesID)
+                ForEach(remaining.prefix(6), id: \.objectID) { a in
+                    HStack {
+                        Circle().fill(a.priorityValue.color).frame(width: 8, height: 8)
+                        Text(a.wName).font(.subheadline)
+                        Spacer()
+                        if let wait = waits?.rides[a.queueTimesID], waits?.open[a.queueTimesID] != false {
+                            Text("\(wait) min").font(.caption.monospacedDigit().weight(.semibold))
+                        }
+                    }
+                }
+                if remaining.count > 6 { Text("+ \(remaining.count - 6) autres").font(.caption).foregroundStyle(.secondary) }
+            }
+            QueueTimesCredit()
+        }
+    }
+
+    private func dailyBudgetCard(now: Date) -> some View {
+        Card {
+            CardTitle(title: "Budget restant par jour", symbol: "gauge.with.dots.needle.50percent", tint: trip.accent)
+            if let daily = BudgetSummary.daily(trip: trip, now: now) {
+                HStack(alignment: .firstTextBaseline) {
+                    BigNumber(label: "Aujourd'hui", value: Fmt.eurShort(daily.perDayEUR), tint: StatusColor.budget(daily.status))
+                    Spacer()
+                    BigNumber(label: "En dollars", value: Fmt.usd(Money.fromEUR(daily.perDayEUR, currency: "USD", rateEURPerUnit: rates.usdToEUR)))
+                }
+                ProgressBar(fraction: daily.perDayEUR > 0 ? daily.spentTodayEUR / daily.perDayEUR : 1, tint: StatusColor.budget(daily.status))
+                Text("Dépensé aujourd'hui : \(Fmt.eur(daily.spentTodayEUR)) · \(daily.daysRemaining) jour\(daily.daysRemaining > 1 ? "s" : "") restant\(daily.daysRemaining > 1 ? "s" : "")")
+                    .font(.caption).foregroundStyle(.secondary)
+            } else {
+                Text("Le voyage est terminé.").font(.subheadline).foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private func todayExpensesCard(now: Date) -> some View {
+        let expenses = trip.expenses(on: DayKey.key(now))
+        return Card {
+            HStack {
+                CardTitle(title: "Dépenses du jour", symbol: "creditcard.fill", tint: trip.accent)
+                Spacer()
+                Button { nav.present(.scanReceipt) } label: { Label("Scanner", systemImage: "doc.viewfinder") }
+                    .buttonStyle(.glass).font(.caption)
+            }
+            if expenses.isEmpty {
+                Text("Aucune dépense aujourd'hui.").font(.subheadline).foregroundStyle(.secondary)
+            } else {
+                ForEach(expenses, id: \.objectID) { e in
+                    ExpenseRow(expense: e).onTapGesture { nav.present(.editExpense(e.objectID)) }
+                }
+                Text("Total : \(Fmt.eur(expenses.reduce(0) { $0 + $1.amountEUR }))").font(.subheadline.weight(.semibold))
+            }
+        }
+    }
+
+    private func upcomingCard(now: Date) -> some View {
+        let installments = trip.expenseList.flatMap { $0.installmentList }.filter { !$0.isPaid }
+            .sorted { ($0.dueDate ?? .distantFuture) < ($1.dueDate ?? .distantFuture) }.prefix(3)
+        let reminders = trip.reminderList.filter { ($0.date ?? .distantPast) > now }.prefix(3)
+        return Card {
+            CardTitle(title: "Échéances et rappels", symbol: "bell.fill", tint: trip.accent)
+            if installments.isEmpty && reminders.isEmpty {
+                Text("Rien à venir.").font(.subheadline).foregroundStyle(.secondary)
+            }
+            ForEach(Array(installments), id: \.objectID) { inst in
+                HStack {
+                    Image(systemName: "calendar.badge.clock").foregroundStyle(inst.computedStatus == .overdue ? Color.red : trip.accent)
+                    Text(inst.expense?.wTitle ?? "")
+                    Spacer()
+                    Text("\(Fmt.money(inst.amount, inst.currencyCode)) · \(inst.dueDate.map { Fmt.day($0) } ?? "")")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                .onTapGesture { nav.open(.dueDates) }
+            }
+            ForEach(Array(reminders), id: \.objectID) { r in
+                HStack {
+                    Image(systemName: "bell").foregroundStyle(trip.accent)
+                    Text(r.title ?? "Rappel")
+                    Spacer()
+                    if let d = r.date { Text(Fmt.dateTime(d)).font(.caption).foregroundStyle(.secondary) }
+                }
+            }
+        }
+    }
+
+    private func refresh(force: Bool) async {
+        if let id = trip.id?.uuidString {
+            await weather.refresh(tripKey: id, latitude: trip.latitude, longitude: trip.longitude, dayKeys: trip.dayKeys, force: force)
+        }
+        await affluence.refresh(force: force)
+        for park in trip.parks(on: todayKey) where park.queueTimesID > 0 {
+            await queueTimes.refreshWaits(parkID: park.queueTimesID)
+        }
+        await LiveActivityManager.refresh(context: context)
+    }
+}

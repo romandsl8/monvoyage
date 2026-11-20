@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Icône MonVoyage — source vectorielle (même géométrie que scripts/make_icon.py).
+     Valise stylisée ; le cadran découpé dans la valise évoque le compte à rebours. Pas de texte. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#5EC8FF"/>
+      <stop offset="1" stop-color="#5B5BF0"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="260" cy="200" r="620" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.22"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="glyph" x1="0" y1="270" x2="0" y2="790" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#F0F4FF"/>
+    </linearGradient>
+    <mask id="cut">
+      <rect width="1024" height="1024" fill="#fff"/>
+      <!-- Arc de 270° (de midi à 9 h, sens horaire), extrémités arrondies -->
+      <path d="M 512 462 A 118 118 0 1 1 394 580" fill="none" stroke="#000" stroke-width="50" stroke-linecap="round"/>
+      <circle cx="512" cy="580" r="24" fill="#000"/>
+    </mask>
+  </defs>
+  <rect width="1024" height="1024" fill="url(#bg)"/>
+  <rect width="1024" height="1024" fill="url(#glow)"/>
+  <g fill="url(#glyph)">
+    <!-- Poignée -->
+    <rect x="400" y="274" width="224" height="156" rx="46" fill="none" stroke="url(#glyph)" stroke-width="34"/>
+    <!-- Corps de la valise, avec le cadran découpé -->
+    <rect x="250" y="375" width="524" height="410" rx="78" mask="url(#cut)"/>
+  </g>
+</svg>

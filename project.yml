@@ -1,0 +1,171 @@
+# =====================================================================
+#  MonVoyage — projet XcodeGen
+#  Le fichier .xcodeproj n'est PAS versionné : Codemagic le génère avec
+#  « xcodegen generate ».
+# =====================================================================
+#
+#  >>> IDENTIFIANTS : tout se change ICI (et dans codemagic.yaml) <<<
+#
+#  APP_DISPLAY_NAME   nom affiché sous l'icône
+#  APP_BUNDLE_ID      bundle ID de l'appli
+#  WIDGET_BUNDLE_ID   bundle ID de l'extension widget
+#  ICLOUD_CONTAINER   conteneur iCloud (CloudKit)
+#  APP_GROUP_ID       App Group partagé appli <-> widget
+#  CLOUDKIT_ENV       Development (1er build, pour créer le schéma) ou Production
+#                     (Codemagic remplace cette valeur par sa variable CLOUDKIT_ENV)
+#  MARKETING_VERSION  version affichée (1.0, 1.1…). Le numéro de build est
+#                     calculé automatiquement par Codemagic.
+# =====================================================================
+
+name: MonVoyage
+
+options:
+  bundleIdPrefix: fr.tanguy
+  developmentLanguage: fr
+  deploymentTarget:
+    iOS: "26.0"
+  createIntermediateGroups: true
+  generateEmptyDirectories: true
+
+settings:
+  base:
+    APP_DISPLAY_NAME: MonVoyage
+    APP_BUNDLE_ID: fr.tanguy.monvoyage
+    WIDGET_BUNDLE_ID: fr.tanguy.monvoyage.widget
+    ICLOUD_CONTAINER: iCloud.fr.tanguy.monvoyage
+    APP_GROUP_ID: group.fr.tanguy.monvoyage
+    CLOUDKIT_ENV: Development
+    MARKETING_VERSION: "1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    VERSIONING_SYSTEM: apple-generic
+    SWIFT_VERSION: "5.0"
+    SWIFT_STRICT_CONCURRENCY: minimal
+    TARGETED_DEVICE_FAMILY: "1"
+    IPHONEOS_DEPLOYMENT_TARGET: "26.0"
+    ENABLE_USER_SCRIPT_SANDBOXING: NO
+    DEVELOPMENT_TEAM: ""
+
+targets:
+  MonVoyage:
+    type: application
+    platform: iOS
+    sources:
+      - path: MonVoyage
+      - path: Shared
+    dependencies:
+      - target: MonVoyageWidget
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(APP_BUNDLE_ID)
+        PRODUCT_NAME: MonVoyage
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        GENERATE_INFOPLIST_FILE: NO
+        CODE_SIGN_ENTITLEMENTS: Config/MonVoyage.entitlements
+    entitlements:
+      path: Config/MonVoyage.entitlements
+      properties:
+        com.apple.developer.icloud-container-identifiers:
+          - $(ICLOUD_CONTAINER)
+        com.apple.developer.icloud-services:
+          - CloudKit
+        com.apple.developer.icloud-container-environment: $(CLOUDKIT_ENV)
+        aps-environment: production
+        com.apple.security.application-groups:
+          - $(APP_GROUP_ID)
+    info:
+      path: Config/MonVoyage-Info.plist
+      properties:
+        CFBundleDisplayName: $(APP_DISPLAY_NAME)
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        CFBundleDevelopmentRegion: fr
+        CFBundleLocalizations: [fr]
+        ITSAppUsesNonExemptEncryption: false
+        LSRequiresIPhoneOS: true
+        UILaunchScreen: {}
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UIBackgroundModes:
+          - remote-notification
+          - fetch
+        BGTaskSchedulerPermittedIdentifiers:
+          - $(APP_BUNDLE_ID).refresh
+        NSSupportsLiveActivities: true
+        CKSharingSupported: true
+        NSCameraUsageDescription: "MonVoyage utilise l'appareil photo pour scanner vos tickets de caisse et photographier vos documents de voyage."
+        NSPhotoLibraryUsageDescription: "MonVoyage accède à vos photos pour joindre un ticket ou un document à une dépense ou une réservation."
+        AppGroupID: $(APP_GROUP_ID)
+        CloudKitContainerID: $(ICLOUD_CONTAINER)
+        CFBundleURLTypes:
+          - CFBundleURLName: $(APP_BUNDLE_ID)
+            CFBundleURLSchemes: [monvoyage]
+        LSSupportsOpeningDocumentsInPlace: false
+        CFBundleDocumentTypes:
+          - CFBundleTypeName: "Archive MonVoyage"
+            CFBundleTypeRole: Viewer
+            LSHandlerRank: Alternate
+            LSItemContentTypes: [public.zip-archive]
+
+  MonVoyageWidget:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: MonVoyageWidget
+      - path: Shared
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(WIDGET_BUNDLE_ID)
+        PRODUCT_NAME: MonVoyageWidget
+        GENERATE_INFOPLIST_FILE: NO
+        CODE_SIGN_ENTITLEMENTS: Config/MonVoyageWidget.entitlements
+        SKIP_INSTALL: YES
+    entitlements:
+      path: Config/MonVoyageWidget.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - $(APP_GROUP_ID)
+    info:
+      path: Config/MonVoyageWidget-Info.plist
+      properties:
+        CFBundleDisplayName: $(APP_DISPLAY_NAME)
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        CFBundleDevelopmentRegion: fr
+        AppGroupID: $(APP_GROUP_ID)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+
+  MonVoyageTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: MonVoyageTests
+    dependencies:
+      - target: MonVoyage
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(APP_BUNDLE_ID).tests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_HOST: $(BUILT_PRODUCTS_DIR)/MonVoyage.app/MonVoyage
+        BUNDLE_LOADER: $(TEST_HOST)
+
+schemes:
+  MonVoyage:
+    build:
+      targets:
+        MonVoyage: all
+        MonVoyageWidget: all
+        MonVoyageTests: [test]
+    test:
+      config: Debug
+      gatherCoverageData: false
+      targets:
+        - MonVoyageTests
+    archive:
+      config: Release

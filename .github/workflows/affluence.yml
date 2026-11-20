@@ -1,0 +1,102 @@
+# Publie chaque jour affluence.json (affluence estimée + horaires des parcs) pour l'appli.
+#
+# Deux modes, choisis par la variable de dépôt PUBLISH_MODE
+# (Settings > Secrets and variables > Actions > onglet Variables) :
+#   - "pages"     (défaut) : dépôt PUBLIC → publication sur la branche gh-pages
+#                  URL : https://<compte>.github.io/<dépôt>/affluence.json
+#   - "data-repo" : dépôt PRIVÉ → envoi dans un petit dépôt public séparé
+#                  (variable DATA_REPO = "compte/monvoyage-data", secret DATA_REPO_TOKEN)
+#                  URL : https://<compte>.github.io/monvoyage-data/affluence.json
+
+name: Affluence des parcs
+
+on:
+  schedule:
+    - cron: "0 5 * * *"     # tous les jours à 05:00 UTC
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: affluence
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      PUBLISH_MODE: ${{ vars.PUBLISH_MODE || 'pages' }}
+      ADAPTERS: ${{ vars.AFFLUENCE_ADAPTERS || 'calendar,themeparks_wiki' }}
+    steps:
+      - name: Récupérer le code
+        uses: actions/checkout@v4
+
+      # ---------- Mode « pages » : dépôt public, branche gh-pages ----------
+      - name: Récupérer le fichier précédent (gh-pages)
+        if: env.PUBLISH_MODE == 'pages'
+        run: |
+          mkdir -p public
+          if git fetch --depth=1 origin gh-pages 2>/dev/null; then
+            git show FETCH_HEAD:affluence.json > public/previous.json 2>/dev/null || rm -f public/previous.json
+          fi
+
+      # ---------- Mode « data-repo » : dépôt privé → dépôt public séparé ----------
+      - name: Récupérer le dépôt de données
+        if: env.PUBLISH_MODE == 'data-repo'
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ vars.DATA_REPO }}
+          token: ${{ secrets.DATA_REPO_TOKEN }}
+          path: data-repo
+
+      - name: Préparer le fichier précédent (data-repo)
+        if: env.PUBLISH_MODE == 'data-repo'
+        run: |
+          mkdir -p public
+          if [ -f data-repo/affluence.json ]; then cp data-repo/affluence.json public/previous.json; fi
+
+      # ---------- Génération (commune) ----------
+      - name: Générer affluence.json
+        run: |
+          python3 --version
+          ARGS="--out public/affluence.json"
+          if [ -f public/previous.json ]; then ARGS="$ARGS --previous public/previous.json"; fi
+          python3 scripts/fetch_affluence.py $ARGS
+          if [ ! -s public/affluence.json ]; then
+            echo "Aucun fichier valide produit : rien n'est publié (le précédent reste en ligne)."
+            echo "SKIP_PUBLISH=1" >> "$GITHUB_ENV"
+          else
+            python3 -c "import json; json.load(open('public/affluence.json'))"
+          fi
+
+      - name: Publier sur gh-pages
+        if: env.PUBLISH_MODE == 'pages' && env.SKIP_PUBLISH != '1'
+        run: |
+          cd public
+          rm -f previous.json
+          touch .nojekyll
+          echo '<!doctype html><meta charset="utf-8"><title>MonVoyage</title><p>Données d’affluence : <a href="affluence.json">affluence.json</a></p>' > index.html
+          git init -q
+          git checkout -q -b gh-pages
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Affluence du $(date -u +%Y-%m-%d)"
+          git push -q --force "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" gh-pages
+          echo "Publié : https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/affluence.json"
+
+      - name: Publier dans le dépôt de données
+        if: env.PUBLISH_MODE == 'data-repo' && env.SKIP_PUBLISH != '1'
+        run: |
+          cp public/affluence.json data-repo/affluence.json
+          touch data-repo/.nojekyll
+          cd data-repo
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add affluence.json .nojekyll
+          if git diff --cached --quiet; then echo "Aucun changement."; exit 0; fi
+          git commit -q -m "Affluence du $(date -u +%Y-%m-%d)"
+          git push -q
+          echo "Publié dans ${{ vars.DATA_REPO }}"

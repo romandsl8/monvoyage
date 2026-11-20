@@ -1,0 +1,246 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<model type="com.apple.IDECoreDataModeler.DataModel" documentVersion="1.0" lastSavedToolsVersion="23788" systemVersion="25A354" minimumToolsVersion="Automatic" sourceLanguage="Swift" usedWithCloudKit="YES" userDefinedModelVersionIdentifier="1">
+    <entity name="Trip" representedClassName="Trip" syncable="YES" codeGenerationType="class">
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="updatedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="name" optional="YES" attributeType="String"/>
+        <attribute name="city" optional="YES" attributeType="String"/>
+        <attribute name="country" optional="YES" attributeType="String"/>
+        <attribute name="latitude" attributeType="Double" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="longitude" attributeType="Double" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="timeZoneID" optional="YES" attributeType="String"/>
+        <attribute name="startDate" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="endDate" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="accentHex" optional="YES" attributeType="String"/>
+        <attribute name="totalBudgetEUR" attributeType="Double" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="localCurrency" optional="YES" attributeType="String" defaultValueString="USD"/>
+        <attribute name="taxRate" attributeType="Double" defaultValueString="0.065" usesScalarValueType="YES"/>
+        <attribute name="defaultTipRate" attributeType="Double" defaultValueString="0.2" usesScalarValueType="YES"/>
+        <attribute name="preDepartureFeesEUR" attributeType="Double" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="postDepartureFeesEUR" attributeType="Double" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="archived" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <relationship name="travelers" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="Traveler" inverseName="trip" inverseEntity="Traveler"/>
+        <relationship name="categories" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="BudgetCategory" inverseName="trip" inverseEntity="BudgetCategory"/>
+        <relationship name="expenses" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="Expense" inverseName="trip" inverseEntity="Expense"/>
+        <relationship name="checklists" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="Checklist" inverseName="trip" inverseEntity="Checklist"/>
+        <relationship name="activities" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="PlanActivity" inverseName="trip" inverseEntity="PlanActivity"/>
+        <relationship name="reservations" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="Reservation" inverseName="trip" inverseEntity="Reservation"/>
+        <relationship name="parks" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="Park" inverseName="trip" inverseEntity="Park"/>
+        <relationship name="crowdOverrides" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="CrowdOverride" inverseName="trip" inverseEntity="CrowdOverride"/>
+        <relationship name="hoursOverrides" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="ParkHoursOverride" inverseName="trip" inverseEntity="ParkHoursOverride"/>
+        <relationship name="reminders" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="Reminder" inverseName="trip" inverseEntity="Reminder"/>
+    </entity>
+    <entity name="Traveler" representedClassName="Traveler" syncable="YES" codeGenerationType="class">
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="updatedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="name" optional="YES" attributeType="String"/>
+        <attribute name="passportExpiry" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="estaExpiry" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="estaNumber" optional="YES" attributeType="String"/>
+        <attribute name="sortIndex" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
+        <relationship name="trip" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Trip" inverseName="travelers" inverseEntity="Trip"/>
+        <relationship name="paidExpenses" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="Expense" inverseName="paidBy" inverseEntity="Expense"/>
+        <relationship name="paidInstallments" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="PaymentInstallment" inverseName="payer" inverseEntity="PaymentInstallment"/>
+        <relationship name="checklistItems" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="ChecklistItem" inverseName="assignee" inverseEntity="ChecklistItem"/>
+    </entity>
+    <entity name="BudgetCategory" representedClassName="BudgetCategory" syncable="YES" codeGenerationType="class">
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="updatedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="name" optional="YES" attributeType="String"/>
+        <attribute name="symbol" optional="YES" attributeType="String"/>
+        <attribute name="plannedEUR" attributeType="Double" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="isPreDeparture" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="sortIndex" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
+        <relationship name="trip" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Trip" inverseName="categories" inverseEntity="Trip"/>
+        <relationship name="expenses" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="Expense" inverseName="category" inverseEntity="Expense"/>
+    </entity>
+    <entity name="Expense" representedClassName="Expense" syncable="YES" codeGenerationType="class">
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="updatedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="title" optional="YES" attributeType="String"/>
+        <attribute name="amount" attributeType="Double" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="currency" optional="YES" attributeType="String" defaultValueString="EUR"/>
+        <attribute name="rateUsed" attributeType="Double" defaultValueString="1" usesScalarValueType="YES"/>
+        <attribute name="amountEUR" attributeType="Double" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="date" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="note" optional="YES" attributeType="String"/>
+        <attribute name="isPretaxPrice" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="taxAmount" attributeType="Double" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="tipAmount" attributeType="Double" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="merchant" optional="YES" attributeType="String"/>
+        <attribute name="isSettled" attributeType="Boolean" defaultValueString="YES" usesScalarValueType="YES"/>
+        <attribute name="receiptImage" optional="YES" attributeType="Binary" allowsExternalBinaryDataStorage="YES"/>
+        <relationship name="trip" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Trip" inverseName="expenses" inverseEntity="Trip"/>
+        <relationship name="category" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="BudgetCategory" inverseName="expenses" inverseEntity="BudgetCategory"/>
+        <relationship name="paidBy" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Traveler" inverseName="paidExpenses" inverseEntity="Traveler"/>
+        <relationship name="installments" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="PaymentInstallment" inverseName="expense" inverseEntity="PaymentInstallment"/>
+        <relationship name="activity" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="PlanActivity" inverseName="expense" inverseEntity="PlanActivity"/>
+        <relationship name="reservation" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Reservation" inverseName="expense" inverseEntity="Reservation"/>
+    </entity>
+    <entity name="PaymentInstallment" representedClassName="PaymentInstallment" syncable="YES" codeGenerationType="class">
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="updatedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="kindRaw" attributeType="Integer 16" defaultValueString="1" usesScalarValueType="YES"/>
+        <attribute name="amount" attributeType="Double" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="dueDate" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="statusRaw" attributeType="Integer 16" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="paidDate" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="paidRate" attributeType="Double" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="paidAmountEUR" attributeType="Double" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="sortIndex" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
+        <relationship name="expense" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Expense" inverseName="installments" inverseEntity="Expense"/>
+        <relationship name="payer" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Traveler" inverseName="paidInstallments" inverseEntity="Traveler"/>
+    </entity>
+    <entity name="Checklist" representedClassName="Checklist" syncable="YES" codeGenerationType="class">
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="updatedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="title" optional="YES" attributeType="String"/>
+        <attribute name="symbol" optional="YES" attributeType="String"/>
+        <attribute name="sortIndex" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
+        <relationship name="trip" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Trip" inverseName="checklists" inverseEntity="Trip"/>
+        <relationship name="items" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="ChecklistItem" inverseName="checklist" inverseEntity="ChecklistItem"/>
+    </entity>
+    <entity name="ChecklistItem" representedClassName="ChecklistItem" syncable="YES" codeGenerationType="class">
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="updatedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="title" optional="YES" attributeType="String"/>
+        <attribute name="isDone" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="dueDate" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="sortIndex" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
+        <relationship name="checklist" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Checklist" inverseName="items" inverseEntity="Checklist"/>
+        <relationship name="assignee" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Traveler" inverseName="checklistItems" inverseEntity="Traveler"/>
+    </entity>
+    <entity name="PlanActivity" representedClassName="PlanActivity" syncable="YES" codeGenerationType="class">
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="updatedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="day" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="time" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="title" optional="YES" attributeType="String"/>
+        <attribute name="place" optional="YES" attributeType="String"/>
+        <attribute name="kindRaw" attributeType="Integer 16" defaultValueString="5" usesScalarValueType="YES"/>
+        <attribute name="note" optional="YES" attributeType="String"/>
+        <attribute name="cost" attributeType="Double" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="sortIndex" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
+        <relationship name="trip" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Trip" inverseName="activities" inverseEntity="Trip"/>
+        <relationship name="expense" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Expense" inverseName="activity" inverseEntity="Expense"/>
+        <relationship name="park" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Park" inverseName="activities" inverseEntity="Park"/>
+    </entity>
+    <entity name="Reservation" representedClassName="Reservation" syncable="YES" codeGenerationType="class">
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="updatedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="kindRaw" attributeType="Integer 16" defaultValueString="7" usesScalarValueType="YES"/>
+        <attribute name="title" optional="YES" attributeType="String"/>
+        <attribute name="startDate" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="endDate" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="confirmationNumber" optional="YES" attributeType="String"/>
+        <attribute name="provider" optional="YES" attributeType="String"/>
+        <attribute name="amount" attributeType="Double" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="currency" optional="YES" attributeType="String" defaultValueString="EUR"/>
+        <attribute name="note" optional="YES" attributeType="String"/>
+        <attribute name="pnr" optional="YES" attributeType="String"/>
+        <attribute name="passengers" optional="YES" attributeType="String"/>
+        <relationship name="trip" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Trip" inverseName="reservations" inverseEntity="Trip"/>
+        <relationship name="attachments" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="Attachment" inverseName="reservation" inverseEntity="Attachment"/>
+        <relationship name="flightSegments" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="FlightSegment" inverseName="reservation" inverseEntity="FlightSegment"/>
+        <relationship name="expense" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Expense" inverseName="reservation" inverseEntity="Expense"/>
+    </entity>
+    <entity name="FlightSegment" representedClassName="FlightSegment" syncable="YES" codeGenerationType="class">
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="updatedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="flightNumber" optional="YES" attributeType="String"/>
+        <attribute name="airlineCode" optional="YES" attributeType="String"/>
+        <attribute name="airlineName" optional="YES" attributeType="String"/>
+        <attribute name="departureIATA" optional="YES" attributeType="String"/>
+        <attribute name="arrivalIATA" optional="YES" attributeType="String"/>
+        <attribute name="departureDate" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="arrivalDate" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="departureTZ" optional="YES" attributeType="String"/>
+        <attribute name="arrivalTZ" optional="YES" attributeType="String"/>
+        <attribute name="terminal" optional="YES" attributeType="String"/>
+        <attribute name="seat" optional="YES" attributeType="String"/>
+        <attribute name="cabinClass" optional="YES" attributeType="String"/>
+        <attribute name="baggage" optional="YES" attributeType="String"/>
+        <attribute name="sortIndex" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
+        <relationship name="reservation" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Reservation" inverseName="flightSegments" inverseEntity="Reservation"/>
+    </entity>
+    <entity name="Attachment" representedClassName="Attachment" syncable="YES" codeGenerationType="class">
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="updatedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="data" optional="YES" attributeType="Binary" allowsExternalBinaryDataStorage="YES"/>
+        <attribute name="mimeKind" optional="YES" attributeType="String" defaultValueString="image"/>
+        <attribute name="name" optional="YES" attributeType="String"/>
+        <attribute name="sortIndex" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
+        <relationship name="reservation" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Reservation" inverseName="attachments" inverseEntity="Reservation"/>
+    </entity>
+    <entity name="Park" representedClassName="Park" syncable="YES" codeGenerationType="class">
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="updatedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="name" optional="YES" attributeType="String"/>
+        <attribute name="queueTimesID" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="latitude" attributeType="Double" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="longitude" attributeType="Double" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="sortIndex" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
+        <relationship name="trip" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Trip" inverseName="parks" inverseEntity="Trip"/>
+        <relationship name="attractions" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="Attraction" inverseName="park" inverseEntity="Attraction"/>
+        <relationship name="activities" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="PlanActivity" inverseName="park" inverseEntity="PlanActivity"/>
+        <relationship name="crowdOverrides" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="CrowdOverride" inverseName="park" inverseEntity="CrowdOverride"/>
+        <relationship name="hoursOverrides" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="ParkHoursOverride" inverseName="park" inverseEntity="ParkHoursOverride"/>
+    </entity>
+    <entity name="Attraction" representedClassName="Attraction" syncable="YES" codeGenerationType="class">
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="updatedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="name" optional="YES" attributeType="String"/>
+        <attribute name="area" optional="YES" attributeType="String"/>
+        <attribute name="queueTimesID" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="priority" attributeType="Integer 16" defaultValueString="1" usesScalarValueType="YES"/>
+        <attribute name="expressEligible" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="minHeightCm" attributeType="Integer 16" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="note" optional="YES" attributeType="String"/>
+        <attribute name="doneDate" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="assignedDay" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="sortIndex" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
+        <relationship name="park" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Park" inverseName="attractions" inverseEntity="Park"/>
+    </entity>
+    <entity name="CrowdOverride" representedClassName="CrowdOverride" syncable="YES" codeGenerationType="class">
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="updatedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="date" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="level" attributeType="Integer 16" defaultValueString="5" usesScalarValueType="YES"/>
+        <attribute name="label" optional="YES" attributeType="String"/>
+        <relationship name="trip" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Trip" inverseName="crowdOverrides" inverseEntity="Trip"/>
+        <relationship name="park" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Park" inverseName="crowdOverrides" inverseEntity="Park"/>
+    </entity>
+    <entity name="ParkHoursOverride" representedClassName="ParkHoursOverride" syncable="YES" codeGenerationType="class">
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="updatedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="date" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="openTime" optional="YES" attributeType="String"/>
+        <attribute name="closeTime" optional="YES" attributeType="String"/>
+        <relationship name="trip" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Trip" inverseName="hoursOverrides" inverseEntity="Trip"/>
+        <relationship name="park" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Park" inverseName="hoursOverrides" inverseEntity="Park"/>
+    </entity>
+    <entity name="Reminder" representedClassName="Reminder" syncable="YES" codeGenerationType="class">
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="updatedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="title" optional="YES" attributeType="String"/>
+        <attribute name="date" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="notificationID" optional="YES" attributeType="String"/>
+        <relationship name="trip" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Trip" inverseName="reminders" inverseEntity="Trip"/>
+    </entity>
+</model>

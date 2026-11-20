@@ -1,0 +1,140 @@
+# =====================================================================
+#  MonVoyage — Codemagic : génère le projet, teste, signe, envoie sur TestFlight
+# =====================================================================
+#
+#  >>> À RENSEIGNER (une seule fois) <<<
+#  - integrations.app_store_connect : nom EXACT de votre clé API dans
+#    Codemagic (Team settings > Integrations > Developer Portal).
+#  - vars.APP_STORE_APPLE_ID : identifiant numérique de l'appli
+#    (App Store Connect > l'appli > Informations sur l'app > Identifiant Apple).
+#  - groupe de variables « monvoyage_signing » (dans l'interface Codemagic)
+#    contenant CERTIFICATE_PRIVATE_KEY (secret).
+#  - vars.CLOUDKIT_ENV : Development pour le 1er build (création du schéma),
+#    puis Production.
+#
+#  Les identifiants (bundle IDs, conteneur iCloud, App Group) doivent être
+#  identiques à ceux en haut de project.yml.
+# =====================================================================
+
+workflows:
+  ios-testflight:
+    name: MonVoyage → TestFlight
+    instance_type: mac_mini_m2
+    max_build_duration: 90
+
+    integrations:
+      app_store_connect: APP_STORE_CONNECT_INTEGRATION
+
+    environment:
+      xcode: latest
+      groups:
+        - monvoyage_signing          # CERTIFICATE_PRIVATE_KEY
+      vars:
+        APP_BUNDLE_ID: fr.tanguy.monvoyage
+        WIDGET_BUNDLE_ID: fr.tanguy.monvoyage.widget
+        ICLOUD_CONTAINER: iCloud.fr.tanguy.monvoyage
+        APP_GROUP_ID: group.fr.tanguy.monvoyage
+        APP_STORE_APPLE_ID: "0000000000"      # ← à remplacer
+        CLOUDKIT_ENV: Development             # ← Production après déploiement du schéma
+        XCODE_PROJECT: MonVoyage.xcodeproj
+        XCODE_SCHEME: MonVoyage
+        # NOTIFY_EMAIL: vous@example.com      # facultatif (voir publishing.email)
+
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: main
+          include: true
+          source: true
+      cancel_previous_builds: true
+
+    scripts:
+      - name: Installer XcodeGen
+        script: |
+          brew install xcodegen
+
+      - name: Appliquer les identifiants et l'environnement CloudKit
+        script: |
+          set -e
+          sed -i '' "s/^    CLOUDKIT_ENV: .*/    CLOUDKIT_ENV: ${CLOUDKIT_ENV}/" project.yml
+          sed -i '' "s/^    APP_BUNDLE_ID: .*/    APP_BUNDLE_ID: ${APP_BUNDLE_ID}/" project.yml
+          sed -i '' "s/^    WIDGET_BUNDLE_ID: .*/    WIDGET_BUNDLE_ID: ${WIDGET_BUNDLE_ID}/" project.yml
+          sed -i '' "s/^    ICLOUD_CONTAINER: .*/    ICLOUD_CONTAINER: ${ICLOUD_CONTAINER}/" project.yml
+          sed -i '' "s/^    APP_GROUP_ID: .*/    APP_GROUP_ID: ${APP_GROUP_ID}/" project.yml
+          echo "--- Réglages utilisés ---"
+          grep -E "^    (CLOUDKIT_ENV|APP_BUNDLE_ID|WIDGET_BUNDLE_ID|ICLOUD_CONTAINER|APP_GROUP_ID|MARKETING_VERSION):" project.yml
+
+      - name: Générer le projet Xcode
+        script: |
+          xcodegen generate
+
+      - name: Tests unitaires (le build échoue si un test échoue)
+        script: |
+          set -eo pipefail
+          mkdir -p build
+          SIM_ID=$(xcrun simctl list devices available -j | python3 -c '
+          import json, sys
+          data = json.load(sys.stdin)["devices"]
+          runtimes = sorted(k for k in data if "iOS" in k)
+          for runtime in reversed(runtimes):
+              phones = [d for d in data[runtime] if d["name"].startswith("iPhone")]
+              if phones:
+                  print(phones[0]["udid"]); break
+          ')
+          echo "Simulateur : $SIM_ID"
+          xcodebuild test \
+            -project "$XCODE_PROJECT" \
+            -scheme "$XCODE_SCHEME" \
+            -destination "id=$SIM_ID" \
+            -resultBundlePath build/tests.xcresult \
+            CODE_SIGNING_ALLOWED=NO \
+            | tee build/xcodebuild-test.log | grep -E "Test Case|error:|failed|passed|\*\* TEST" || true
+          # Le code de sortie de xcodebuild est conservé grâce à pipefail ;
+          # on revérifie explicitement le résultat :
+          grep -q "\*\* TEST SUCCEEDED \*\*" build/xcodebuild-test.log
+
+      - name: Signature (profils App Store pour l'appli et le widget)
+        script: |
+          set -e
+          app-store-connect fetch-signing-files "$APP_BUNDLE_ID" --type IOS_APP_STORE --create
+          app-store-connect fetch-signing-files "$WIDGET_BUNDLE_ID" --type IOS_APP_STORE --create
+          keychain initialize
+          keychain add-certificates
+          xcode-project use-profiles
+
+      - name: Numéro de build = dernier build TestFlight + 1
+        script: |
+          set -e
+          LATEST=$(app-store-connect get-latest-testflight-build-number "$APP_STORE_APPLE_ID" 2>/dev/null || echo 0)
+          if ! [[ "$LATEST" =~ ^[0-9]+$ ]]; then LATEST=0; fi
+          NEW=$((LATEST + 1))
+          echo "Dernier build TestFlight : $LATEST → nouveau build : $NEW"
+          agvtool new-version -all "$NEW"
+
+      - name: Compiler l'IPA
+        script: |
+          xcode-project build-ipa \
+            --project "$XCODE_PROJECT" \
+            --scheme "$XCODE_SCHEME"
+
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - build/xcodebuild-test.log
+      - /tmp/xcodebuild_logs/*.log
+      - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.dSYM
+
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
+        beta_build_localizations:
+          - locale: fr-FR
+            whats_to_test: "Nouvelle version de MonVoyage. Vérifiez le budget, le planning, le partage du voyage et les widgets."
+      # Notification par email (facultatif) : décommentez et mettez votre adresse.
+      # email:
+      #   recipients:
+      #     - vous@example.com
+      #   notify:
+      #     success: true
+      #     failure: true

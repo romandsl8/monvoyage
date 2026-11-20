@@ -1,0 +1,19 @@
+# Projet Xcode généré par XcodeGen (Codemagic)
+*.xcodeproj/
+*.xcworkspace/
+Config/
+
+# Xcode
+DerivedData/
+build/
+xcuserdata/
+*.xcuserstate
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# Divers
+.DS_Store
+public/
+__pycache__/
+*.pyc
