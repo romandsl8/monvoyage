@@ -128,6 +128,40 @@ final class DataTests: XCTestCase {
         XCTAssertEqual(BudgetSummary.daily(trip: trip, now: Date())?.perDayEUR, 100)
     }
 
+    /// Hôtel 1 500 € avec seulement un acompte de 300 € payé : il reste 1 200 € à payer,
+    /// visibles dans les échéances même sans versements planifiés.
+    func testDepositOnlyLeavesBalanceDue() {
+        let trip = makeTrip()
+        let hotel = context.make(Expense.self, trip: trip)
+        hotel.trip = trip
+        hotel.title = "Hôtel"
+        hotel.amount = 1500
+        hotel.amountEUR = 1500
+        hotel.isSettled = false
+        let deposit = context.make(PaymentInstallment.self, trip: trip)
+        deposit.kindRaw = InstallmentKind.deposit.rawValue
+        deposit.amount = 300
+        deposit.expense = hotel
+        deposit.markPaid(rateEURPerUnit: 1)
+
+        XCTAssertEqual(hotel.unscheduledAmount, 1200)
+        XCTAssertEqual(hotel.remainingEUR, 1200)
+        XCTAssertEqual(hotel.status, .partial)
+        let due = DueItem.all(for: trip, includePaid: false)
+        XCTAssertEqual(due.count, 1)
+        XCTAssertEqual(due.first?.amount, 1200)
+        XCTAssertEqual(due.first?.label, "Solde restant")
+
+        // Une dépense non payée sans échéancier apparaît aussi.
+        let car = context.make(Expense.self, trip: trip)
+        car.trip = trip
+        car.amount = 250
+        car.amountEUR = 250
+        car.isSettled = false
+        XCTAssertEqual(DueItem.all(for: trip, includePaid: false).count, 2)
+        XCTAssertEqual(BudgetSummary(trip: trip).remainingEUR, 1450)
+    }
+
     /// Le moment choisi (avant / pendant) prime sur la catégorie.
     func testExpensePhase() {
         let trip = makeTrip()

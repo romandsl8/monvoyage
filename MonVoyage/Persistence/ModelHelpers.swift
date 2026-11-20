@@ -231,7 +231,12 @@ extension Expense {
     }
 
     var status: ExpenseStatus {
-        PaymentMath.expenseStatus(installments: paymentValues, isSettled: isSettled)
+        PaymentMath.expenseStatus(installments: paymentValues, isSettled: isSettled, unscheduled: unscheduledAmount)
+    }
+
+    /// Montant (dans la devise de la dépense) non couvert par l'échéancier.
+    var unscheduledAmount: Double {
+        PaymentMath.unscheduledAmount(total: amount, installments: paymentValues)
     }
 
     var paidEUR: Double {
@@ -239,9 +244,11 @@ extension Expense {
                             installments: paymentValues, isSettled: isSettled)
     }
 
+    /// Reste à payer : versements non payés + solde non encore découpé en versements.
     var remainingEUR: Double {
-        PaymentMath.remainingEUR(totalEUR: amountEUR, rate: currencyCode == "EUR" ? 1 : rateUsed,
-                                 installments: paymentValues, isSettled: isSettled)
+        let rate = currencyCode == "EUR" ? 1 : rateUsed
+        let scheduled = PaymentMath.remainingEUR(totalEUR: amountEUR, rate: rate, installments: paymentValues, isSettled: isSettled)
+        return Money.round2(scheduled + unscheduledAmount * rate)
     }
 
     var nextDueInstallment: PaymentInstallment? {

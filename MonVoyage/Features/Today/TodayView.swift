@@ -212,21 +212,23 @@ struct TodayView: View {
     }
 
     private func upcomingCard(now: Date) -> some View {
-        let installments = trip.expenseList.flatMap { $0.installmentList }.filter { !$0.isPaid }
-            .sorted { ($0.dueDate ?? .distantFuture) < ($1.dueDate ?? .distantFuture) }.prefix(3)
+        let installments = DueItem.all(for: trip, includePaid: false).prefix(3)
         let reminders = trip.reminderList.filter { ($0.date ?? .distantPast) > now }.prefix(3)
         return Card {
             CardTitle(title: "Échéances et rappels", symbol: "bell.fill", tint: trip.accent)
             if installments.isEmpty && reminders.isEmpty {
                 Text("Rien à venir.").font(.subheadline).foregroundStyle(.secondary)
             }
-            ForEach(Array(installments), id: \.objectID) { inst in
+            ForEach(Array(installments)) { item in
                 HStack {
-                    Image(systemName: "calendar.badge.clock").foregroundStyle(inst.computedStatus == .overdue ? Color.red : trip.accent)
-                    Text(inst.expense?.wTitle ?? "")
+                    Image(systemName: "calendar.badge.clock").foregroundStyle(item.status == .overdue ? Color.red : trip.accent)
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text(item.expense.wTitle).lineLimit(1)
+                        Text(item.label).font(.caption2).foregroundStyle(.secondary)
+                    }
                     Spacer()
-                    Text("\(Fmt.money(inst.amount, inst.currencyCode)) · \(inst.dueDate.map { Fmt.day($0) } ?? "")")
-                        .font(.caption).foregroundStyle(.secondary)
+                    Text("\(Fmt.money(item.amount, item.currency)) · \(item.date.map { Fmt.day($0) } ?? "")")
+                        .font(.caption).foregroundStyle(.secondary).lineLimit(1).fixedSize()
                 }
                 .onTapGesture { nav.open(.dueDates) }
             }

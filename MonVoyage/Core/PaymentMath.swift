@@ -51,11 +51,11 @@ enum PaymentMath {
         return DayKey.key(dueDate) < DayKey.key(now) ? .overdue : .upcoming
     }
 
-    static func expenseStatus(installments: [InstallmentValue], isSettled: Bool) -> ExpenseStatus {
+    static func expenseStatus(installments: [InstallmentValue], isSettled: Bool, unscheduled: Double = 0) -> ExpenseStatus {
         if installments.isEmpty { return isSettled ? .settled : .planned }
         let paid = installments.filter(\.isPaid).count
         if paid == 0 { return .planned }
-        if paid == installments.count { return .settled }
+        if paid == installments.count && unscheduled < 0.01 { return .settled }
         return .partial
     }
 
@@ -67,6 +67,12 @@ enum PaymentMath {
     static func remainingEUR(totalEUR: Double, rate: Double, installments: [InstallmentValue], isSettled: Bool) -> Double {
         if installments.isEmpty { return isSettled ? 0 : totalEUR }
         return Money.round2(installments.filter { !$0.isPaid }.reduce(0) { $0 + $1.amount * rate })
+    }
+
+    /// Part du total qui n'est couverte par aucun versement (ex. seul l'acompte a été saisi).
+    static func unscheduledAmount(total: Double, installments: [InstallmentValue]) -> Double {
+        guard !installments.isEmpty else { return 0 }
+        return max(0, Money.round2(total - installments.reduce(0) { $0 + $1.amount }))
     }
 
     /// Écart entre la somme des versements et le total (0 = cohérent).
