@@ -25,6 +25,7 @@ struct TodayView: View {
                     }
                 }
                 .padding()
+                .padding(.bottom, 80)   // place pour le bouton « + » flottant
                 .frame(maxWidth: 1100)
                 .frame(maxWidth: .infinity)
             }
@@ -150,7 +151,16 @@ struct TodayView: View {
     private func dailyBudgetCard(now: Date) -> some View {
         Card {
             CardTitle(title: "Budget restant par jour", symbol: "gauge.with.dots.needle.50percent", tint: trip.accent)
-            if let daily = BudgetSummary.daily(trip: trip, now: now) {
+            if BudgetSummary.onSiteBudget(trip: trip) <= 0 {
+                Text("Définissez le budget total du voyage, ou un budget par catégorie de dépenses sur place (Repas, Transport…), pour connaître ce qu'il reste à dépenser chaque jour.")
+                    .font(.subheadline).foregroundStyle(.secondary)
+                HStack {
+                    Button("Budget total") { nav.present(.editTrip) }
+                    Button("Catégories") { nav.open(.budget) }
+                }
+                .buttonStyle(.glass)
+                .font(.caption)
+            } else if let daily = BudgetSummary.daily(trip: trip, now: now) {
                 HStack(alignment: .firstTextBaseline) {
                     BigNumber(label: "Aujourd'hui", value: Fmt.eurShort(daily.perDayEUR), tint: StatusColor.budget(daily.status))
                     Spacer()

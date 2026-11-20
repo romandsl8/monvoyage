@@ -68,17 +68,32 @@ struct TripRootView: View {
 
     private var regularLayout: some View {
         NavigationSplitView {
-            List(selection: Binding<TripModule?>(
-                get: { nav.module == .more ? .today : nav.module },
-                set: { if let m = $0 { nav.open(m) } })) {
+            // Boutons explicites (plus fiable que la sélection de List dans une barre latérale).
+            List {
                 Section {
                     ForEach(TripModule.sidebar) { module in
-                        Label(module.title, systemImage: module.symbol).tag(TripModule?.some(module))
+                        let selected = (nav.module == .more ? .today : nav.module) == module
+                        Button {
+                            nav.open(module)
+                        } label: {
+                            Label(module.title, systemImage: module.symbol)
+                                .foregroundStyle(selected ? Color.white : Color.primary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .contentShape(.rect)
+                        }
+                        .buttonStyle(.plain)
+                        .listRowBackground(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .fill(selected ? trip.accent : Color.clear)
+                                .padding(.horizontal, 8)
+                        )
+                        .accessibilityAddTraits(selected ? .isSelected : [])
                     }
                 } header: {
                     Text(trip.city ?? "")
                 }
             }
+            .listStyle(.sidebar)
             .navigationTitle(trip.wName)
             .toolbar { closeButton }
         } detail: {

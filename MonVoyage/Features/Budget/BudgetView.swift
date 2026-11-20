@@ -28,6 +28,7 @@ struct BudgetView: View {
                 expensesList
             }
             .padding()
+            .padding(.bottom, 80)   // place pour le bouton « + » flottant
             .frame(maxWidth: 1100)
             .frame(maxWidth: .infinity)
         }
@@ -173,25 +174,37 @@ struct ExpenseRow: View {
                 .foregroundStyle(Color.accentColor)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
-                Text(expense.wTitle).font(.body).lineLimit(1)
-                HStack(spacing: 6) {
-                    if let date = expense.date { Text(Fmt.day(date)) }
-                    Label(expense.status.label, systemImage: expense.status.symbol)
-                    if expense.receiptImage != nil { Image(systemName: "paperclip").accessibilityLabel("Ticket joint") }
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(expense.wTitle).font(.body).lineLimit(1)
+                    Spacer(minLength: 4)
+                    Text(Fmt.money(expense.amount, expense.currencyCode))
+                        .font(.body.monospacedDigit().weight(.semibold))
+                        .lineLimit(1)
+                        .fixedSize()
+                }
+                HStack(spacing: 4) {
+                    Text(detailLine)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                    if expense.receiptImage != nil {
+                        Image(systemName: "paperclip").accessibilityLabel("Ticket joint")
+                    }
+                    Spacer(minLength: 4)
+                    if expense.currencyCode != "EUR" {
+                        Text(Fmt.eur(expense.amountEUR)).monospacedDigit().lineLimit(1).fixedSize()
+                    }
                 }
                 .font(.caption).foregroundStyle(.secondary)
-            }
-            Spacer()
-            VStack(alignment: .trailing, spacing: 2) {
-                Text(Fmt.money(expense.amount, expense.currencyCode)).font(.body.monospacedDigit().weight(.semibold))
-                if expense.currencyCode != "EUR" {
-                    Text(Fmt.eur(expense.amountEUR)).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
-                }
             }
         }
         .contentShape(.rect)
         .padding(.vertical, 4)
         .accessibilityElement(children: .combine)
+    }
+
+    /// « ven. 20 nov. · Soldé » sur une seule ligne.
+    private var detailLine: String {
+        [expense.date.map { Fmt.day($0) }, expense.status.label].compactMap { $0 }.joined(separator: " · ")
     }
 }
 

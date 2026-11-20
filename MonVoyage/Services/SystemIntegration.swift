@@ -15,7 +15,8 @@ enum WidgetSnapshotWriter {
             WidgetCenter.shared.reloadAllTimelines()
             return
         }
-        let daily = BudgetSummary.daily(trip: trip, now: now)
+        // Pas de budget défini → pas de « 0 € » rouge dans le widget.
+        let daily = BudgetSummary.onSiteBudget(trip: trip) > 0 ? BudgetSummary.daily(trip: trip, now: now) : nil
         let rate = ExchangeRateService.shared.usdToEUR
         let next = trip.activityList.first { ($0.time ?? .distantPast) > now }
         let snapshot = WidgetSnapshot(
