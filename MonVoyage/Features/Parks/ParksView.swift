@@ -40,14 +40,8 @@ struct ParksListView: View {
         List {
             if trip.parkList.isEmpty {
                 EmptyState(symbol: "sparkles", title: "Aucun parc",
-                           message: "Ajoutez les parcs Universal Orlando ou cherchez un parc dans la liste Queue-Times.",
-                           actionTitle: "Ajouter les parcs Universal") {
-                    Task {
-                        await queueTimes.loadParks()
-                        TripFactory.addDefaultParks(to: trip, in: context)
-                        context.saveIfNeeded()
-                    }
-                }
+                           message: "Choisissez les parcs de votre voyage : Disney, Universal, Six Flags, Europa-Park… plus de 100 parcs avec temps d'attente en direct.",
+                           actionTitle: "Choisir les parcs") { showAddPark = true }
                 .listRowBackground(Color.clear)
             }
             ForEach(trip.parkList, id: \.objectID) { park in
@@ -79,56 +73,31 @@ struct ParksListView: View {
     }
 }
 
-/// Recherche d'un parc dans parks.json (Queue-Times).
+/// Ajout de parcs à un voyage existant (sélection multiple dans la liste Queue-Times).
 struct ParkPickerView: View {
     @ObservedObject var trip: Trip
     @Environment(\.managedObjectContext) private var context
-    @Environment(\.dismiss) private var dismiss
-    @EnvironmentObject private var queueTimes: QueueTimesService
-    @State private var query = ""
-    @State private var manualName = ""
-
-    private var results: [QTPark] {
-        let q = query.trimmingCharacters(in: .whitespaces)
-        return q.isEmpty ? queueTimes.parks : queueTimes.parks.filter { $0.name.localizedCaseInsensitiveContains(q) }
-    }
+    @State private var selection: [QTPark] = []
 
     var body: some View {
-        NavigationStack {
-            List {
-                Section("Parc sans données en ligne") {
-                    HStack {
-                        TextField("Nom du parc", text: $manualName)
-                        Button("Ajouter") { add(name: manualName, id: 0, lat: 0, lon: 0) }.disabled(manualName.isEmpty)
-                    }
-                }
-                Section {
-                    ForEach(results) { park in
-                        Button { add(name: park.name, id: park.id, lat: Double(park.latitude ?? "") ?? 0, lon: Double(park.longitude ?? "") ?? 0) } label: {
-                            Text(park.name).foregroundStyle(.primary)
-                        }
-                    }
-                } footer: { QueueTimesCredit() }
+        ParkMultiPicker(selection: $selection,
+                        alreadyAdded: Set(trip.parkList.map(\.queueTimesID).filter { $0 > 0 }),
+                        onManualAdd: addManual)
+            .onDisappear {
+                guard !selection.isEmpty else { return }
+                TripFactory.addParks(selection, to: trip, in: context)
+                context.saveIfNeeded()
+                selection = []
             }
-            .overlay { if queueTimes.parks.isEmpty { ProgressView("Chargement des parcs…") } }
-            .searchable(text: $query, prompt: "Rechercher un parc")
-            .navigationTitle("Ajouter un parc")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Fermer") { dismiss() } } }
-            .task { await queueTimes.loadParks() }
-        }
     }
 
-    private func add(name: String, id: Int64, lat: Double, lon: Double) {
+    private func addManual(_ name: String) {
         let park = context.make(Park.self, trip: trip)
         park.name = name
-        park.queueTimesID = id
-        park.latitude = lat
-        park.longitude = lon
+        park.queueTimesID = 0
         park.sortIndex = Int32(trip.parkList.count)
         park.trip = trip
         context.saveIfNeeded()
-        dismiss()
     }
 }
 

@@ -46,7 +46,7 @@ struct CountdownView: View {
         let days = s.daysLeft(at: entry.date)
         if days < 0 { return ("✓", "terminé") }
         if days == 0 { return ("Jour J", "c'est aujourd'hui !") }
-        return ("\(days)", days == 1 ? "jour" : "jours")
+        return ("J-\(days)", "avant le départ")
     }
 
     private func small(_ s: WidgetSnapshot) -> some View {
@@ -89,10 +89,8 @@ struct CountdownView: View {
         let h = headline(s)
         return ZStack {
             AccessoryWidgetBackground()
-            VStack(spacing: -2) {
-                Text(h.big).font(.system(size: 20, weight: .bold, design: .rounded)).minimumScaleFactor(0.5)
-                Text(s.isOngoing(at: entry.date) ? "jour" : "J-").font(.system(size: 9))
-            }
+            Text(h.big).font(.system(size: 18, weight: .bold, design: .rounded))
+                .minimumScaleFactor(0.4).lineLimit(1).padding(.horizontal, 4)
         }
         .widgetAccentable()
     }

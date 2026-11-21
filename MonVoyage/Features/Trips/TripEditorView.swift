@@ -26,7 +26,8 @@ struct TripEditorView: View {
     @State private var tipPercent = "20"
     @State private var preFees = ""
     @State private var postFees = ""
-    @State private var addDefaultParks = true
+    @State private var selectedParks: [QTPark] = []
+    @State private var showParkPicker = false
     @State private var showCitySearch = false
     @State private var loaded = false
 
@@ -87,12 +88,32 @@ struct TripEditorView: View {
                 } footer: {
                     Text("Ces frais (parking, transport vers l'aéroport…) sont exclus du budget restant par jour.")
                 }
-                if trip == nil {
-                    Section {
-                        Toggle("Ajouter les parcs Universal Orlando", isOn: $addDefaultParks)
-                    } footer: {
-                        Text("Universal Studios Florida, Islands of Adventure, Epic Universe et Volcano Bay. Vous pourrez en ajouter ou en retirer.")
+                Section {
+                    ForEach(selectedParks) { park in
+                        HStack {
+                            Image(systemName: "sparkles").foregroundStyle(Color(hex: accentHex))
+                            Text(park.name)
+                            Spacer()
+                            Button {
+                                selectedParks.removeAll { $0.id == park.id }
+                            } label: {
+                                Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("Retirer \(park.name)")
+                        }
                     }
+                    Button {
+                        showParkPicker = true
+                    } label: {
+                        Label(selectedParks.isEmpty ? "Choisir les parcs" : "Modifier la sélection", systemImage: "plus.circle.fill")
+                    }
+                } header: {
+                    Text("Parcs")
+                } footer: {
+                    Text(trip == nil
+                         ? "Disney, Universal, Six Flags, Europa-Park… Les temps d'attente en direct s'afficheront pour ces parcs. Facultatif : vous pourrez en ajouter plus tard."
+                         : "Parcs à ajouter au voyage. Pour en retirer, allez dans Parcs › Ma liste.")
                 }
             }
             .navigationTitle(trip == nil ? "Nouveau voyage" : "Modifier le voyage")
@@ -111,6 +132,10 @@ struct TripEditorView: View {
                     longitude = result.longitude
                     timeZoneID = result.timezone ?? timeZoneID
                 }
+            }
+            .sheet(isPresented: $showParkPicker) {
+                ParkMultiPicker(selection: $selectedParks,
+                                alreadyAdded: Set(trip?.parkList.map(\.queueTimesID).filter { $0 > 0 } ?? []))
             }
             .onAppear(perform: load)
         }
@@ -154,8 +179,8 @@ struct TripEditorView: View {
         target.defaultTipRate = (Money.parse(tipPercent) ?? 20) / 100
         target.preDepartureFeesEUR = Money.parse(preFees) ?? 0
         target.postDepartureFeesEUR = Money.parse(postFees) ?? 0
-        if trip == nil && addDefaultParks {
-            TripFactory.addDefaultParks(to: target, in: context)
+        if !selectedParks.isEmpty {
+            TripFactory.addParks(selectedParks, to: target, in: context)
         }
         context.saveIfNeeded()
         if trip == nil { onCreated?(target) }

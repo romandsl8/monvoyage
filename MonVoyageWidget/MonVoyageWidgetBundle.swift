@@ -75,11 +75,15 @@ extension WidgetSnapshot {
 }
 
 extension View {
-    /// Fond de widget teinté de la couleur d'accent (rendu en verre par le système en mode teinté).
+    /// Fond discret : neutre avec un très léger voile de la couleur du voyage.
+    /// En mode « Transparent » ou « Teinté » de l'écran d'accueil, le système le retire (verre).
     func tripWidgetBackground(_ hex: String?) -> some View {
         containerBackground(for: .widget) {
-            LinearGradient(colors: [Color(hex: hex).opacity(0.35), Color(hex: hex).opacity(0.12)],
-                           startPoint: .topLeading, endPoint: .bottomTrailing)
+            ZStack {
+                Rectangle().fill(.background)
+                LinearGradient(colors: [Color(hex: hex).opacity(0.10), Color(hex: hex).opacity(0.02)],
+                               startPoint: .topLeading, endPoint: .bottomTrailing)
+            }
         }
     }
 }

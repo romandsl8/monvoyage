@@ -11,7 +11,7 @@ struct QTPark: Codable, Identifiable, Hashable {
     let timezone: String?
 }
 
-struct QTCompany: Codable {
+struct QTCompany: Codable, Identifiable {
     let id: Int64
     let name: String
     let parks: [QTPark]
@@ -43,15 +43,6 @@ struct WaitTimesCache: Codable {
 }
 
 /// Parcs proposés par défaut (ids Queue-Times vérifiés le 20/11/2026, revérifiés via parks.json).
-enum DefaultParks {
-    static let names: [(name: String, fallbackID: Int64, match: String)] = [
-        ("Universal Studios Florida", 65, "Universal Studios At Universal Orlando"),
-        ("Islands of Adventure", 64, "Islands Of Adventure"),
-        ("Epic Universe", 334, "Epic Universe"),
-        ("Volcano Bay", 67, "Volcano Bay")
-    ]
-}
-
 @MainActor
 final class QueueTimesService: ObservableObject {
     static let shared = QueueTimesService()
@@ -60,28 +51,32 @@ final class QueueTimesService: ObservableObject {
     @Published private(set) var waitTimes: [Int64: WaitTimesCache] = [:]
     @Published private(set) var lastError: String?
 
+    /// Parcs regroupés par exploitant (Disney, Universal, Six Flags…).
+    @Published private(set) var companies: [QTCompany] = []
+
     private static let parksCache = "queuetimes-parks.json"
+    private static let companiesCache = "queuetimes-companies.json"
 
     init() {
         parks = CacheStore.load([QTPark].self, name: Self.parksCache) ?? []
+        companies = CacheStore.load([QTCompany].self, name: Self.companiesCache) ?? []
     }
 
     func loadParks(force: Bool = false) async {
-        if !parks.isEmpty && !force { return }
+        if !parks.isEmpty && !companies.isEmpty && !force { return }
         do {
-            let companies = try await Network.get([QTCompany].self, from: APIEndpoints.queueTimesParks)
-            let all = companies.flatMap(\.parks).sorted { $0.name < $1.name }
+            let loaded = try await Network.get([QTCompany].self, from: APIEndpoints.queueTimesParks)
+            let all = loaded.flatMap(\.parks).sorted { $0.name < $1.name }
             parks = all
+            companies = loaded.filter { !$0.parks.isEmpty }
+                .map { QTCompany(id: $0.id, name: $0.name, parks: $0.parks.sorted { $0.name < $1.name }) }
+                .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
             CacheStore.save(all, name: Self.parksCache)
+            CacheStore.save(companies, name: Self.companiesCache)
             lastError = nil
         } catch {
             lastError = error.localizedDescription
         }
-    }
-
-    /// Id Queue-Times d'un parc par défaut (via parks.json si disponible).
-    func resolveID(match: String, fallback: Int64) -> Int64 {
-        parks.first { $0.name.localizedCaseInsensitiveContains(match) }?.id ?? fallback
     }
 
     /// Liste des attractions (pour l'import d'un appui).

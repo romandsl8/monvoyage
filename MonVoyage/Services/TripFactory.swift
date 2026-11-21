@@ -42,24 +42,19 @@ enum TripFactory {
         return trip
     }
 
-    /// Ajoute les parcs de départ (Universal Orlando) au voyage.
-    @MainActor
-    static func addDefaultParks(to trip: Trip, in context: NSManagedObjectContext) {
-        let existing = Set(trip.parkList.map(\.queueTimesID))
-        let service = QueueTimesService.shared
+    /// Ajoute au voyage les parcs choisis (sans doublon).
+    static func addParks(_ parks: [QTPark], to trip: Trip, in context: NSManagedObjectContext) {
+        var existing = Set(trip.parkList.map(\.queueTimesID))
         var index = Int32(trip.parkList.count)
-        for item in DefaultParks.names {
-            let id = service.resolveID(match: item.match, fallback: item.fallbackID)
-            guard !existing.contains(id) else { continue }
+        for qt in parks where !existing.contains(qt.id) {
             let park = context.make(Park.self, trip: trip)
-            park.name = item.name
-            park.queueTimesID = id
+            park.name = qt.name
+            park.queueTimesID = qt.id
+            park.latitude = Double(qt.latitude ?? "") ?? 0
+            park.longitude = Double(qt.longitude ?? "") ?? 0
             park.sortIndex = index
-            if let qt = service.parks.first(where: { $0.id == id }) {
-                park.latitude = Double(qt.latitude ?? "") ?? 0
-                park.longitude = Double(qt.longitude ?? "") ?? 0
-            }
             park.trip = trip
+            existing.insert(qt.id)
             index += 1
         }
     }

@@ -29,6 +29,7 @@ struct WaitTimesBoard: View {
     @State private var search = ""
     @State private var refreshing = false
     @State private var addedTick = 0
+    @State private var showPicker = false
 
     static let refreshSeconds: UInt64 = 60
 
@@ -81,7 +82,8 @@ struct WaitTimesBoard: View {
                 statusLine
                 if parks.isEmpty {
                     EmptyState(symbol: "sparkles", title: "Aucun parc",
-                               message: "Ajoutez des parcs depuis l'onglet « Ma liste » pour voir leurs temps d'attente.")
+                               message: "Choisissez les parcs de votre voyage pour voir leurs temps d'attente en direct.",
+                               actionTitle: "Choisir les parcs") { showPicker = true }
                 } else if rides.isEmpty {
                     EmptyState(symbol: "clock.badge.questionmark", title: allRides.isEmpty ? "Pas encore de données" : "Aucune attraction",
                                message: allRides.isEmpty
@@ -102,6 +104,7 @@ struct WaitTimesBoard: View {
         .groupedBackground()
         .searchable(text: $search, prompt: "Rechercher une attraction")
         .refreshable { await refresh() }
+        .sheet(isPresented: $showPicker) { ParkPickerView(trip: trip) }
         .task(id: parks.map(\.queueTimesID)) {
             // Temps réel : actualisation à l'ouverture puis toutes les minutes, tant que l'écran est visible.
             while !Task.isCancelled {
