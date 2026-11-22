@@ -268,3 +268,12 @@ final class ParkHoursTests: XCTestCase {
         XCTAssertEqual(qt.intersection(tpw), qt)
     }
 }
+
+final class LocalTimeTests: XCTestCase {
+    func testLocalTimeUsesDestinationTimeZone() {
+        // 2026-11-22 18:05 UTC = 13h05 à Orlando (UTC−5 en novembre).
+        let date = Date(timeIntervalSince1970: 1_795_370_700)
+        XCTAssertEqual(LocalTimeLabel.time(date, TimeZone(identifier: "America/New_York")!), "13h05")
+        XCTAssertEqual(LocalTimeLabel.time(date, TimeZone(identifier: "Europe/Paris")!), "19h05")
+    }
+}

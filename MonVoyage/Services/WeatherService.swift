@@ -14,6 +14,30 @@ struct DayWeather: Codable, Equatable {
     var label: String { WeatherLogic.label(for: code) }
 }
 
+/// Météo en ce moment à destination.
+struct CurrentWeather: Codable, Equatable {
+    var temperature: Double
+    var apparent: Double?
+    var code: Int
+    var isDay: Bool
+    var humidity: Int?
+    var windKmh: Double?
+    var precipitation: Double?
+    var fetchedAt: Date
+
+    var symbol: String {
+        if !isDay {
+            switch code {
+            case 0: return "moon.stars.fill"
+            case 1, 2: return "cloud.moon.fill"
+            default: break
+            }
+        }
+        return WeatherLogic.symbol(for: code)
+    }
+    var label: String { !isDay && code == 0 ? "Ciel dégagé" : WeatherLogic.label(for: code) }
+}
+
 struct TripWeatherCache: Codable {
     var updatedAt: Date
     var latitude: Double
@@ -151,6 +175,46 @@ final class WeatherService: ObservableObject {
             URLQueryItem(name: "timezone", value: "auto")
         ])
         return parse(response, isNormal: true)
+    }
+
+    // MARK: Météo actuelle
+
+    @Published private(set) var currents: [String: CurrentWeather] = [:]
+
+    func current(tripKey: String) -> CurrentWeather? {
+        currents[tripKey] ?? CacheStore.load(CurrentWeather.self, name: "current-\(tripKey).json")
+    }
+
+    /// Conditions actuelles (au plus toutes les 15 minutes, sauf `force`).
+    func refreshCurrent(tripKey: String, latitude: Double, longitude: Double, force: Bool = false) async {
+        guard latitude != 0 || longitude != 0 else { return }
+        if !force, let c = current(tripKey: tripKey), Date().timeIntervalSince(c.fetchedAt) < 15 * 60 {
+            if currents[tripKey] == nil { currents[tripKey] = c }
+            return
+        }
+        struct Response: Decodable {
+            struct Current: Decodable {
+                let temperature_2m: Double?
+                let apparent_temperature: Double?
+                let weather_code: Int?
+                let is_day: Int?
+                let relative_humidity_2m: Int?
+                let wind_speed_10m: Double?
+                let precipitation: Double?
+            }
+            let current: Current?
+        }
+        guard let response = try? await Network.get(Response.self, from: APIEndpoints.openMeteoForecast, query: [
+            URLQueryItem(name: "latitude", value: String(latitude)),
+            URLQueryItem(name: "longitude", value: String(longitude)),
+            URLQueryItem(name: "current", value: "temperature_2m,apparent_temperature,weather_code,is_day,relative_humidity_2m,wind_speed_10m,precipitation"),
+            URLQueryItem(name: "timezone", value: "auto")
+        ]), let c = response.current, let t = c.temperature_2m else { return }
+        let value = CurrentWeather(temperature: t, apparent: c.apparent_temperature, code: c.weather_code ?? 2,
+                                   isDay: (c.is_day ?? 1) == 1, humidity: c.relative_humidity_2m,
+                                   windKmh: c.wind_speed_10m, precipitation: c.precipitation, fetchedAt: Date())
+        currents[tripKey] = value
+        CacheStore.save(value, name: "current-\(tripKey).json")
     }
 
     /// Géocodage d'une ville (coordonnées + fuseau horaire).

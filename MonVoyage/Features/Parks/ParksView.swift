@@ -141,6 +141,8 @@ struct ParkDetailView: View {
 
             if park.queueTimesID > 0 {
                 Section {
+                    LocalTimeLabel(timeZone: hours.schedule(for: park)?.timeZone ?? trip.tripTimeZone)
+                        .font(.subheadline.weight(.semibold)).foregroundStyle(trip.accent)
                     ParkHoursList(schedule: hours.schedule(for: park), tripDayKeys: trip.dayKeys, tint: trip.accent)
                 } header: {
                     Label("Horaires d'ouverture", systemImage: "clock")

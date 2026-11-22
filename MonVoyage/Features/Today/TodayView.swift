@@ -13,6 +13,8 @@ struct TodayView: View {
     @EnvironmentObject private var affluence: AffluenceService
     @EnvironmentObject private var queueTimes: QueueTimesService
 
+    @State private var showBudgetSettings = false
+
     private var todayKey: String { DayKey.key(Date()) }
 
     var body: some View {
@@ -33,7 +35,17 @@ struct TodayView: View {
         .groupedBackground()
         .navigationTitle(trip.wName)
         .refreshable { await refresh(force: true) }
+        .sheet(isPresented: $showBudgetSettings) { BudgetSettingsView(trip: trip) }
         .task { await refresh(force: false) }
+        .task {
+            // Météo actuelle : actualisée toutes les 15 minutes tant que l'écran est affiché.
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 15 * 60 * 1_000_000_000)
+                if let id = trip.id?.uuidString {
+                    await weather.refreshCurrent(tripKey: id, latitude: trip.latitude, longitude: trip.longitude)
+                }
+            }
+        }
         .overlay(alignment: .bottomTrailing) {
             FloatingAddButton(label: "Ajouter une dépense") {
                 nav.present(.newExpense(ExpensePrefill(currency: trip.isOngoing() ? trip.currencyCode : "EUR")))
@@ -57,6 +69,12 @@ struct TodayView: View {
                             Label(city, systemImage: "mappin.and.ellipse")
                                 .font(.subheadline.weight(.semibold))
                                 .opacity(0.9)
+                        }
+                        if !trip.isFinished(now: now) {
+                            LocalTimeLabel(timeZone: trip.tripTimeZone)
+                                .font(.caption.weight(.semibold))
+                                .padding(.horizontal, 10).padding(.vertical, 5)
+                                .background(.white.opacity(0.18), in: .capsule)
                         }
                         if trip.isOngoing(now: now) {
                             Text(Fmt.longDay(now, timeZone: trip.tripTimeZone).capitalized)
@@ -183,14 +201,44 @@ struct TodayView: View {
 
     private func weatherCard(now: Date) -> some View {
         let key = trip.dayKeys.contains(DayKey.key(now)) ? DayKey.key(now) : (trip.dayKeys.first ?? DayKey.key(now))
+        let id = trip.id?.uuidString ?? ""
         return Card {
-            CardTitle(title: key == DayKey.key(now) ? "Météo du jour" : "Météo du premier jour", symbol: "cloud.sun.fill", tint: trip.accent)
-            if let id = trip.id?.uuidString, let w = weather.weather(tripKey: id, dayKey: key) {
+            CardTitle(title: "Météo", symbol: "cloud.sun.fill", tint: trip.accent)
+            if let c = weather.current(tripKey: id) {
+                HStack(alignment: .center, spacing: 14) {
+                    Image(systemName: c.symbol).symbolRenderingMode(.multicolor).font(.system(size: 40))
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("En ce moment\(trip.city.map { $0.isEmpty ? "" : " à \($0)" } ?? "")")
+                            .font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                        HStack(alignment: .firstTextBaseline, spacing: 8) {
+                            Text(Fmt.temp(c.temperature)).font(.system(size: 34, weight: .bold, design: .rounded)).monospacedDigit()
+                            Text(c.label).font(.subheadline.weight(.medium))
+                        }
+                        Text(currentDetail(c)).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .accessibilityElement(children: .combine)
+                Divider()
+            }
+            Text(key == DayKey.key(now) ? "Aujourd'hui" : "Premier jour du voyage")
+                .font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+            if let w = weather.weather(tripKey: id, dayKey: key) {
                 WeatherBadge(weather: w, updatedAt: weather.updatedAt(tripKey: id))
             } else {
                 Text("Météo indisponible (hors ligne ou destination non renseignée).").font(.subheadline).foregroundStyle(.secondary)
             }
         }
+    }
+
+    private func currentDetail(_ c: CurrentWeather) -> String {
+        var parts: [String] = []
+        if let a = c.apparent { parts.append("ressenti \(Fmt.temp(a))") }
+        if let w = c.windKmh { parts.append("vent \(Int(w.rounded())) km/h") }
+        if let h = c.humidity { parts.append("humidité \(h) %") }
+        if let p = c.precipitation, p > 0.05 { parts.append("pluie \(Fmt.number(p, digits: 1)) mm") }
+        parts.append(Fmt.updated(c.fetchedAt))
+        return parts.joined(separator: " · ")
     }
 
     private func parksCard(now: Date) -> some View {
@@ -225,7 +273,7 @@ struct TodayView: View {
                 Text("Définissez le budget total du voyage, ou un budget par catégorie de dépenses sur place (Repas, Transport…), pour connaître ce qu'il reste à dépenser chaque jour.")
                     .font(.subheadline).foregroundStyle(.secondary)
                 HStack {
-                    Button("Budget total") { nav.present(.editTrip) }
+                    Button("Budget total") { showBudgetSettings = true }
                     Button("Catégories") { nav.open(.budget) }
                 }
                 .buttonStyle(.glass)
@@ -294,6 +342,7 @@ struct TodayView: View {
     private func refresh(force: Bool) async {
         if let id = trip.id?.uuidString {
             await weather.refresh(tripKey: id, latitude: trip.latitude, longitude: trip.longitude, dayKeys: trip.dayKeys, force: force)
+            await weather.refreshCurrent(tripKey: id, latitude: trip.latitude, longitude: trip.longitude, force: force)
         }
         await affluence.refresh(force: force)
         for park in trip.parks(on: todayKey) where park.queueTimesID > 0 {

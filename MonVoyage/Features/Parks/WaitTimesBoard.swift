@@ -81,7 +81,12 @@ struct WaitTimesBoard: View {
             VStack(alignment: .leading, spacing: 12) {
                 filters
                 statusLine
-                if !parks.isEmpty { hoursStrip }
+                if !parks.isEmpty {
+                    LocalTimeLabel(timeZone: parksTimeZone, place: trip.city)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(trip.accent)
+                    hoursStrip
+                }
                 if parks.isEmpty {
                     EmptyState(symbol: "sparkles", title: "Aucun parc",
                                message: "Choisissez les parcs de votre voyage pour voir leurs temps d'attente en direct.",
@@ -173,6 +178,11 @@ struct WaitTimesBoard: View {
     }
 
     // MARK: Horaires du jour
+
+    /// Fuseau des parcs (horaires ThemeParks.wiki), sinon celui du voyage.
+    private var parksTimeZone: TimeZone {
+        parks.lazy.compactMap { hours.schedule(for: $0)?.timeZone }.first ?? trip.tripTimeZone
+    }
 
     /// Une pastille par parc : ouvert / fermé et horaires du jour (touchez pour filtrer sur ce parc).
     private var hoursStrip: some View {

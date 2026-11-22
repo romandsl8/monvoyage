@@ -9,6 +9,7 @@ struct BudgetView: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
     @EnvironmentObject private var nav: TripNavigation
     @State private var showCategories = false
+    @State private var showBudgetSettings = false
     @State private var filterCategory: NSManagedObjectID?
 
     var body: some View {
@@ -43,6 +44,7 @@ struct BudgetView: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
+                    Button { showBudgetSettings = true } label: { Label("Modifier le budget", systemImage: "pencil") }
                     Button { nav.present(.scanReceipt) } label: { Label("Scanner un ticket", systemImage: "doc.viewfinder") }
                     Button { nav.open(.dueDates) } label: { Label("Échéances", systemImage: "calendar.badge.clock") }
                     Button { showCategories = true } label: { Label("Catégories et budgets", systemImage: "square.grid.2x2") }
@@ -50,6 +52,11 @@ struct BudgetView: View {
             }
         }
         .sheet(isPresented: $showCategories) { CategoriesEditorView(trip: trip) }
+        .sheet(isPresented: $showBudgetSettings) {
+            BudgetSettingsView(trip: trip) {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { showCategories = true }
+            }
+        }
     }
 
     private func totals(_ s: BudgetSummary) -> some View {
@@ -65,7 +72,7 @@ struct BudgetView: View {
                         if s.budgetEUR > 0 {
                             Text("sur un budget de \(Fmt.eurShort(s.budgetEUR))").font(.caption.weight(.medium)).opacity(0.9)
                         } else {
-                            Text("Définissez un budget total dans le voyage").font(.caption.weight(.medium)).opacity(0.9)
+                            Text("Aucun budget total défini").font(.caption.weight(.medium)).opacity(0.9)
                         }
                     }
                     Spacer(minLength: 0)
@@ -84,6 +91,13 @@ struct BudgetView: View {
                         .accessibilityElement(children: .combine)
                     }
                 }
+                Button { showBudgetSettings = true } label: {
+                    Label(s.budgetEUR > 0 ? "Modifier le budget" : "Définir le budget", systemImage: "pencil")
+                        .font(.caption.weight(.semibold))
+                        .padding(.horizontal, 12).padding(.vertical, 7)
+                        .background(.white.opacity(0.2), in: .capsule)
+                }
+                .buttonStyle(.plain)
             }
 
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 10)], spacing: 10) {

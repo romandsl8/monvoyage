@@ -303,3 +303,39 @@ enum CrowdColor {
         }
     }
 }
+
+/// Heure locale de la destination, mise à jour chaque minute, avec le décalage par rapport à l'iPhone.
+struct LocalTimeLabel: View {
+    let timeZone: TimeZone
+    var place: String? = nil
+
+    var body: some View {
+        TimelineView(.everyMinute) { context in
+            let now = context.date
+            Label {
+                Text(text(now))
+            } icon: {
+                Image(systemName: "clock.fill")
+            }
+            .accessibilityLabel("Heure locale \(text(now))")
+        }
+    }
+
+    private func text(_ now: Date) -> String {
+        var parts = [Self.time(now, timeZone)]
+        if let place, !place.isEmpty { parts[0] += " à \(place)" }
+        let diff = (timeZone.secondsFromGMT(for: now) - TimeZone.current.secondsFromGMT(for: now)) / 60
+        if diff != 0 {
+            let h = abs(diff) / 60, m = abs(diff) % 60
+            parts.append("\(diff > 0 ? "+" : "−")\(h) h\(m > 0 ? String(format: "%02d", m) : "") par rapport à vous")
+        }
+        return parts.joined(separator: " · ")
+    }
+
+    static func time(_ date: Date, _ timeZone: TimeZone) -> String {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = timeZone
+        let c = cal.dateComponents([.hour, .minute], from: date)
+        return String(format: "%dh%02d", c.hour ?? 0, c.minute ?? 0)
+    }
+}
