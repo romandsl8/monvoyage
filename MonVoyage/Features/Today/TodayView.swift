@@ -110,6 +110,7 @@ struct TodayView: View {
 
     @ViewBuilder
     private func cards(now: Date) -> some View {
+        if !trip.isFinished(now: now) { PreparationCard(trip: trip) }
         nextActivitiesCard(now: now)
         weatherCard(now: now)
         if !trip.parks(on: DayKey.key(now)).isEmpty { parksCard(now: now) }

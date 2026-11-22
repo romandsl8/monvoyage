@@ -12,8 +12,8 @@ struct ChecklistsView: View {
         List {
             if trip.checklistList.isEmpty {
                 EmptyState(symbol: "checklist", title: "Aucune liste",
-                           message: "Valise, documents, avant le départ… créez autant de listes que vous voulez.",
-                           actionTitle: "Créer une liste") { showNew = true }
+                           message: "Partez des listes prêtes à l'emploi (à préparer, valise, maison) ou créez les vôtres.",
+                           actionTitle: "Ajouter les listes prêtes") { addTemplates() }
                     .listRowBackground(Color.clear)
             }
             ForEach(trip.checklistList, id: \.objectID) { list in
@@ -47,7 +47,14 @@ struct ChecklistsView: View {
         .groupedBackground()
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Button { showNew = true } label: { Label("Nouvelle liste", systemImage: "plus") }
+                Menu {
+                    Button { showNew = true } label: { Label("Nouvelle liste vide", systemImage: "square.and.pencil") }
+                    if !ChecklistTemplates.hasAll(trip) {
+                        Button { addTemplates() } label: { Label("Ajouter les listes prêtes", systemImage: "wand.and.stars") }
+                    }
+                } label: {
+                    Label("Nouvelle liste", systemImage: "plus")
+                }
             }
         }
         .alert("Nouvelle liste", isPresented: $showNew) {
@@ -63,6 +70,11 @@ struct ChecklistsView: View {
             }
             Button("Annuler", role: .cancel) { newTitle = "" }
         }
+    }
+
+    private func addTemplates() {
+        withAnimation { ChecklistTemplates.add(to: trip, in: context) }
+        context.saveIfNeeded()
     }
 }
 

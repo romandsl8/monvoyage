@@ -24,6 +24,19 @@ final class DataTests: XCTestCase {
         return trip
     }
 
+    func testChecklistTemplatesAreAddedOnceWithDueDates() {
+        let trip = makeTrip()
+        trip.startDate = DayKey.noon(Date().addingTimeInterval(120 * 86400))
+        XCTAssertEqual(ChecklistTemplates.add(to: trip, in: context), ChecklistTemplates.all.count)
+        XCTAssertEqual(ChecklistTemplates.add(to: trip, in: context), 0)   // pas de doublon
+        XCTAssertTrue(ChecklistTemplates.hasAll(trip))
+        let prep = trip.checklistList.first { $0.wTitle == "À préparer" }
+        XCTAssertNotNil(prep)
+        XCTAssertTrue(prep?.itemList.allSatisfy { $0.dueDate != nil && $0.dueDate! <= trip.startDate! } ?? false)
+        let suitcase = trip.checklistList.first { $0.wTitle == "Valise" }
+        XCTAssertGreaterThan(suitcase?.itemList.count ?? 0, 5)
+    }
+
     func testNewTripHasDefaultCategoriesAndTwoTravelers() {
         let trip = makeTrip()
         XCTAssertEqual(trip.categoryList.map { $0.name ?? "" },

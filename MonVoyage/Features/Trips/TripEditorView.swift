@@ -179,6 +179,7 @@ struct TripEditorView: View {
         target.defaultTipRate = (Money.parse(tipPercent) ?? 20) / 100
         target.preDepartureFeesEUR = Money.parse(preFees) ?? 0
         target.postDepartureFeesEUR = Money.parse(postFees) ?? 0
+        if trip == nil { ChecklistTemplates.add(to: target, in: context) }
         if !selectedParks.isEmpty {
             TripFactory.addParks(selectedParks, to: target, in: context)
         }
