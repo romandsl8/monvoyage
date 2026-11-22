@@ -151,7 +151,7 @@ Les deux personnes installent l'appli **TestFlight** depuis l'App Store sur leur
 
 Les builds tournent sur **GitHub Actions** (machine Mac `xcode-27`, Xcode 27.2), avec les outils open source `codemagic-cli-tools` pour la signature. Tout se règle dans **https://github.com/romandsl8/monvoyage/settings/secrets/actions** → onglet **Secrets** → **New repository secret**.
 
-> Quota : un dépôt privé dispose d'environ **200 minutes Mac gratuites par mois** (les minutes Mac comptent ×10 sur les 2 000 minutes gratuites). Un build TestFlight prend 15 à 25 min, l'import du schéma 2 à 3 min. Les modifications de documentation ne relancent pas de build.
+> Quota : le dépôt est public, les minutes de build GitHub Actions sont donc gratuites et illimitées. Les journaux de build masquent le nom du titulaire du certificat (***).
 
 ### 4.1 Clé API App Store Connect
 1. **https://appstoreconnect.apple.com/access/integrations/api** → onglet **Clés d'équipe** → **+** (ou **Générer une clé API**).

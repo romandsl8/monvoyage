@@ -116,8 +116,21 @@ jobs:
 
       - name: Signature (profils App Store pour l'appli et le widget)
         run: |
-          app-store-connect fetch-signing-files "$APP_BUNDLE_ID" --type IOS_APP_STORE --create
-          app-store-connect fetch-signing-files "$WIDGET_BUNDLE_ID" --type IOS_APP_STORE --create
+          # Dépôt public : le nom du titulaire du certificat et l'identifiant d'équipe
+          # sont masqués (***) dans tous les journaux qui suivent.
+          set -o pipefail
+          app-store-connect fetch-signing-files "$APP_BUNDLE_ID" --type IOS_APP_STORE --create > "$RUNNER_TEMP/sign.log" 2>&1 || { sed -E 's/(Distribution|Developer): [^(]+/\1: ***/g' "$RUNNER_TEMP/sign.log"; exit 1; }
+          app-store-connect fetch-signing-files "$WIDGET_BUNDLE_ID" --type IOS_APP_STORE --create >> "$RUNNER_TEMP/sign.log" 2>&1 || { sed -E 's/(Distribution|Developer): [^(]+/\1: ***/g' "$RUNNER_TEMP/sign.log"; exit 1; }
+          grep -oE "(Distribution|Developer): [^(]+\([A-Z0-9]{10}\)" "$RUNNER_TEMP/sign.log" | sort -u > "$RUNNER_TEMP/ids.txt" || true
+          while IFS= read -r line; do
+            name=$(echo "$line" | sed -E 's/^[A-Za-z]+: (.*) \(([A-Z0-9]{10})\)$/\1/')
+            team=$(echo "$line" | sed -E 's/.*\(([A-Z0-9]{10})\)$/\1/')
+            [ -n "$name" ] && echo "::add-mask::$name"
+            [ -n "$team" ] && echo "::add-mask::$team"
+            echo "$name" >> "$RUNNER_TEMP/private-words.txt"
+            echo "$team" >> "$RUNNER_TEMP/private-words.txt"
+          done < "$RUNNER_TEMP/ids.txt"
+          cat "$RUNNER_TEMP/sign.log"
           keychain initialize
           keychain add-certificates
           xcode-project use-profiles
@@ -141,6 +154,17 @@ jobs:
       - name: Restaurer le trousseau
         if: always()
         run: keychain use-login || true
+
+      - name: Retirer les données personnelles des journaux conservés
+        if: always()
+        run: |
+          [ -f "$RUNNER_TEMP/private-words.txt" ] || exit 0
+          for log in build/xcodebuild-test.log /tmp/xcodebuild_logs/*.log; do
+            [ -f "$log" ] || continue
+            while IFS= read -r word; do
+              [ -n "$word" ] && perl -pi -e "s/\Q$word\E/***/g" "$log"
+            done < "$RUNNER_TEMP/private-words.txt"
+          done
 
       - name: Conserver les journaux
         if: always()

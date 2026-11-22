@@ -135,3 +135,7 @@ ZIP, et export → import aller-retour. Le build GitHub échoue si un test écho
 
 Demandez la modification à Claude Code, poussez sur `main` : GitHub Actions teste, incrémente le numéro de build et livre sur TestFlight.
 Respectez la règle de migration ci-dessus pour toute modification du modèle de données.
+
+## Licence
+
+Code propriétaire, **tous droits réservés** (voir [LICENSE](LICENSE)). Le dépôt est public uniquement pour la compilation automatique ; aucune réutilisation n'est autorisée.
