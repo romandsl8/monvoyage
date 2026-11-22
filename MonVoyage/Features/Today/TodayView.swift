@@ -50,7 +50,7 @@ struct TodayView: View {
     @ViewBuilder
     private func header(now: Date) -> some View {
         VStack(spacing: 12) {
-            HeroCard(tint: trip.accent) {
+            HeroCard(tint: trip.accent, park: trip.coverPark(now: now)) {
                 HStack(alignment: .top) {
                     VStack(alignment: .leading, spacing: 6) {
                         if let city = trip.city, !city.isEmpty {
@@ -121,14 +121,15 @@ struct TodayView: View {
     private func nextActivitiesCard(now: Date) -> some View {
         let upcoming = trip.activityList.filter { ($0.time ?? .distantPast) > now }.prefix(2)
         let nextFlight = trip.flightSegments.first { ($0.departureDate ?? .distantPast) > now }
+        let dues = DueItem.all(for: trip, includePaid: false).prefix(3)
         return Card {
             CardTitle(title: "À suivre", symbol: "clock.fill", tint: trip.accent)
             if let flight = nextFlight, let dep = flight.departureDate, dep.timeIntervalSince(now) < 2 * 86400 {
                 FlightLine(segment: flight)
                 Text("Décollage dans ") + Text(dep, style: .relative)
             }
-            if upcoming.isEmpty && nextFlight == nil {
-                Text("Rien de prévu. Ajoutez des activités dans le planning.").font(.subheadline).foregroundStyle(.secondary)
+            if upcoming.isEmpty && nextFlight == nil && dues.isEmpty {
+                Text("Rien de prévu. Ajoutez des activités dans le planning ou des échéances de paiement.").font(.subheadline).foregroundStyle(.secondary)
             }
             ForEach(Array(upcoming), id: \.objectID) { activity in
                 VStack(alignment: .leading, spacing: 2) {
@@ -139,6 +140,43 @@ struct TodayView: View {
                 }
                 .onTapGesture { nav.present(.editActivity(activity.objectID)) }
             }
+            if !dues.isEmpty {
+                if !upcoming.isEmpty || nextFlight != nil { Divider() }
+                ForEach(Array(dues)) { item in
+                    let overdue = item.status == .overdue
+                    HStack(spacing: 10) {
+                        IconBubble(symbol: overdue ? "exclamationmark.circle.fill" : "creditcard.fill",
+                                   tint: overdue ? .red : trip.accent, size: 32)
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(item.expense.wTitle).font(.subheadline.weight(.semibold)).lineLimit(1)
+                            Text("\(item.label) · \(item.date.map { dueWhen($0, now: now) } ?? "sans date")")
+                                .font(.caption).foregroundStyle(overdue ? Color.red : Color.secondary).lineLimit(1)
+                        }
+                        Spacer(minLength: 6)
+                        Text(Fmt.money(item.amount, item.currency))
+                            .font(.subheadline.weight(.semibold)).monospacedDigit()
+                            .foregroundStyle(overdue ? Color.red : Color.primary)
+                            .lineLimit(1).fixedSize()
+                    }
+                    .contentShape(.rect)
+                    .onTapGesture { nav.open(.dueDates) }
+                    .accessibilityElement(children: .combine)
+                    .accessibilityHint("Ouvre les échéances")
+                }
+            }
+        }
+    }
+
+    /// « aujourd'hui », « demain », « dans 12 jours », « en retard de 3 jours » ou la date.
+    private func dueWhen(_ date: Date, now: Date) -> String {
+        let days = DayMath.daysBetween(now, date)
+        switch days {
+        case ..<(-1): return "en retard de \(-days) jours"
+        case -1: return "en retard d'un jour"
+        case 0: return "aujourd'hui"
+        case 1: return "demain"
+        case 2...30: return "dans \(days) jours · \(Fmt.day(date))"
+        default: return Fmt.day(date)
         }
     }
 
@@ -234,33 +272,19 @@ struct TodayView: View {
         }
     }
 
+    @ViewBuilder
     private func upcomingCard(now: Date) -> some View {
-        let installments = DueItem.all(for: trip, includePaid: false).prefix(3)
         let reminders = trip.reminderList.filter { ($0.date ?? .distantPast) > now }.prefix(3)
-        return Card {
-            CardTitle(title: "Échéances et rappels", symbol: "bell.fill", tint: trip.accent)
-            if installments.isEmpty && reminders.isEmpty {
-                Text("Rien à venir.").font(.subheadline).foregroundStyle(.secondary)
-            }
-            ForEach(Array(installments)) { item in
-                HStack {
-                    Image(systemName: "calendar.badge.clock").foregroundStyle(item.status == .overdue ? Color.red : trip.accent)
-                    VStack(alignment: .leading, spacing: 0) {
-                        Text(item.expense.wTitle).lineLimit(1)
-                        Text(item.label).font(.caption2).foregroundStyle(.secondary)
+        if !reminders.isEmpty {
+            Card {
+                CardTitle(title: "Rappels", symbol: "bell.fill", tint: trip.accent)
+                ForEach(Array(reminders), id: \.objectID) { r in
+                    HStack {
+                        Image(systemName: "bell").foregroundStyle(trip.accent)
+                        Text(r.title ?? "Rappel")
+                        Spacer()
+                        if let d = r.date { Text(Fmt.dateTime(d)).font(.caption).foregroundStyle(.secondary) }
                     }
-                    Spacer()
-                    Text("\(Fmt.money(item.amount, item.currency)) · \(item.date.map { Fmt.day($0) } ?? "")")
-                        .font(.caption).foregroundStyle(.secondary).lineLimit(1).fixedSize()
-                }
-                .onTapGesture { nav.open(.dueDates) }
-            }
-            ForEach(Array(reminders), id: \.objectID) { r in
-                HStack {
-                    Image(systemName: "bell").foregroundStyle(trip.accent)
-                    Text(r.title ?? "Rappel")
-                    Spacer()
-                    if let d = r.date { Text(Fmt.dateTime(d)).font(.caption).foregroundStyle(.secondary) }
                 }
             }
         }

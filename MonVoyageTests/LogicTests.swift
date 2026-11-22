@@ -231,3 +231,14 @@ final class ZipArchiveTests: XCTestCase {
         XCTAssertThrowsError(try ZipArchive.read(Data("pas un zip".utf8)))
     }
 }
+
+final class ParkProximityTests: XCTestCase {
+    func testResortParksAreCloseAndCitiesFar() {
+        // Disneyland Park Paris ↔ Disney Adventure World Paris : voisins.
+        XCTAssertLessThan(QueueTimesService.distanceKm(48.8722344, 2.7758079, 48.8673, 2.779008), 1.5)
+        // Universal Studios Florida ↔ Epic Universe : même complexe (< 12 km).
+        XCTAssertLessThan(QueueTimesService.distanceKm(28.4749, -81.4687, 28.4733, -81.4469 + 0.0), 12)
+        // Disneyland Paris ↔ Disneyland (Californie) : très loin.
+        XCTAssertGreaterThan(QueueTimesService.distanceKm(48.8722344, 2.7758079, 33.8104856, -117.9190001), 5000)
+    }
+}

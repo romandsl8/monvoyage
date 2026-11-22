@@ -67,20 +67,20 @@ struct CardTitle: View {
 /// Grande carte d'en-tête en dégradé de la couleur du voyage (texte blanc).
 struct HeroCard<Content: View>: View {
     let tint: Color
+    /// Parc dont la photo sert de fond (sinon dégradé).
+    var park: Park? = nil
     @ViewBuilder var content: Content
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) { content }
             .padding(20)
+            .padding(.top, park != nil ? 40 : 0)
             .frame(maxWidth: .infinity, alignment: .leading)
             .foregroundStyle(.white)
+            .shadow(color: .black.opacity(park != nil ? 0.35 : 0), radius: 4)
             .background {
-                ZStack {
-                    LinearGradient(colors: [tint, tint.opacity(0.72)], startPoint: .topLeading, endPoint: .bottomTrailing)
-                    // Reflet doux en haut à droite.
-                    Circle().fill(.white.opacity(0.14)).frame(width: 220).offset(x: 140, y: -110).blur(radius: 6)
-                }
-                .clipShape(.rect(cornerRadius: Theme.heroRadius, style: .continuous))
+                ParkPhotoBackground(park: park, tint: tint)
+                    .clipShape(.rect(cornerRadius: Theme.heroRadius, style: .continuous))
             }
             .shadow(color: tint.opacity(0.30), radius: 16, x: 0, y: 8)
     }

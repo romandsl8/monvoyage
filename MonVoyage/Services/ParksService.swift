@@ -79,6 +79,25 @@ final class QueueTimesService: ObservableObject {
         }
     }
 
+    /// Parcs du même complexe : même groupe et à moins de 12 km
+    /// (ex. Disneyland Park et Disney Adventure World à Paris, les parcs Universal Orlando).
+    func siblings(of park: QTPark) -> [QTPark] {
+        guard let company = companies.first(where: { $0.parks.contains { $0.id == park.id } }),
+              let lat = Double(park.latitude ?? ""), let lon = Double(park.longitude ?? "") else { return [] }
+        return company.parks.filter { other in
+            guard other.id != park.id, let olat = Double(other.latitude ?? ""), let olon = Double(other.longitude ?? "") else { return false }
+            return Self.distanceKm(lat, lon, olat, olon) < 12
+        }
+    }
+
+    nonisolated static func distanceKm(_ lat1: Double, _ lon1: Double, _ lat2: Double, _ lon2: Double) -> Double {
+        let r = 6371.0
+        let dLat = (lat2 - lat1) * .pi / 180
+        let dLon = (lon2 - lon1) * .pi / 180
+        let a = sin(dLat / 2) * sin(dLat / 2) + cos(lat1 * .pi / 180) * cos(lat2 * .pi / 180) * sin(dLon / 2) * sin(dLon / 2)
+        return 2 * r * atan2(sqrt(a), sqrt(1 - a))
+    }
+
     /// Liste des attractions (pour l'import d'un appui).
     func fetchRides(parkID: Int64) async throws -> [(area: String, ride: QTRide)] {
         let response = try await Network.get(QTQueueResponse.self, from: APIEndpoints.queueTimes(parkID: parkID))

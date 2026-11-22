@@ -164,18 +164,25 @@ struct TripCardView: View {
                 countdown
             }
             .foregroundStyle(.white)
+            .shadow(color: .black.opacity(trip.coverPark() != nil ? 0.35 : 0), radius: 4)
             .padding(18)
+            .padding(.top, trip.coverPark() != nil ? 60 : 0)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background {
-                ZStack {
-                    LinearGradient(colors: [trip.accent, trip.accent.opacity(0.7)], startPoint: .topLeading, endPoint: .bottomTrailing)
-                    Image(systemName: "airplane")
-                        .font(.system(size: 90, weight: .bold))
-                        .foregroundStyle(.white.opacity(0.10))
-                        .rotationEffect(.degrees(-20))
-                        .offset(x: 120, y: 10)
+                if let park = trip.coverPark() {
+                    ParkPhotoBackground(park: park, tint: trip.accent)
+                } else {
+                    ZStack {
+                        LinearGradient(colors: [trip.accent, trip.accent.opacity(0.7)], startPoint: .topLeading, endPoint: .bottomTrailing)
+                        Image(systemName: "airplane")
+                            .font(.system(size: 90, weight: .bold))
+                            .foregroundStyle(.white.opacity(0.10))
+                            .rotationEffect(.degrees(-20))
+                            .offset(x: 120, y: 10)
+                    }
                 }
             }
+            .clipped()
 
             // Corps : dates, budget, partage.
             VStack(alignment: .leading, spacing: 10) {

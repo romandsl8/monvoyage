@@ -5,6 +5,7 @@ import CoreData
 struct ParksView: View {
     @ObservedObject var trip: Trip
     @SceneStorage("parks.mode") private var mode = "waits"
+    @State private var showAddPark = false
 
     var body: some View {
         Group {
@@ -16,6 +17,7 @@ struct ParksView: View {
         }
         .navigationTitle("Parcs et attractions")
         .navigationBarTitleDisplayMode(.inline)
+        .sheet(isPresented: $showAddPark) { ParkPickerView(trip: trip) }
         .toolbar {
             ToolbarItem(placement: .principal) {
                 Picker("Affichage", selection: $mode) {
@@ -24,6 +26,9 @@ struct ParksView: View {
                 }
                 .pickerStyle(.segmented)
                 .frame(maxWidth: 320)
+            }
+            ToolbarItem(placement: .topBarTrailing) {
+                Button { showAddPark = true } label: { Label("Ajouter des parcs", systemImage: "plus") }
             }
         }
     }
@@ -49,10 +54,16 @@ struct ParksListView: View {
                     ParkDetailView(park: park, trip: trip)
                 } label: {
                     let progress = park.mustDoProgress
+                    HStack(spacing: 12) {
+                    ParkPhotoBackground(park: park, tint: trip.accent, compact: true)
+                        .frame(width: 64, height: 48)
+                        .clipShape(.rect(cornerRadius: 12, style: .continuous))
+                        .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 4) {
                         Text(park.wName).font(.headline)
                         Text(progress.total == 0 ? "\(park.attractionList.count) attraction(s)" : "\(progress.done)/\(progress.total) incontournables")
                             .font(.caption).foregroundStyle(.secondary)
+                    }
                     }
                 }
             }
@@ -64,11 +75,6 @@ struct ParksListView: View {
         }
         .scrollContentBackground(.hidden)
         .groupedBackground()
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button { showAddPark = true } label: { Label("Ajouter un parc", systemImage: "plus") }
-            }
-        }
         .sheet(isPresented: $showAddPark) { ParkPickerView(trip: trip) }
     }
 }

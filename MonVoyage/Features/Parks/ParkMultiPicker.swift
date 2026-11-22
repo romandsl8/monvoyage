@@ -13,6 +13,7 @@ struct ParkMultiPicker: View {
     @EnvironmentObject private var queueTimes: QueueTimesService
     @State private var query = ""
     @State private var manualName = ""
+    @State private var linkedNote: String?
 
     private var selectedIDs: Set<Int64> { Set(selection.map(\.id)) }
 
@@ -30,8 +31,12 @@ struct ParkMultiPicker: View {
         NavigationStack {
             List {
                 if !selection.isEmpty && query.isEmpty {
-                    Section("Sélection (\(selection.count))") {
+                    Section {
                         ForEach(selection) { park in row(park) }
+                    } header: {
+                        Text("Sélection (\(selection.count))")
+                    } footer: {
+                        Text("Les parcs voisins du même groupe sont ajoutés automatiquement. Décochez ceux que vous ne visiterez pas.")
                     }
                 }
                 if let onManualAdd, query.isEmpty {
@@ -82,6 +87,21 @@ struct ParkMultiPicker: View {
                 ToolbarItem(placement: .confirmationAction) { Button("OK") { dismiss() } }
             }
             .task { await queueTimes.loadParks() }
+            .safeAreaInset(edge: .bottom) {
+                if let linkedNote {
+                    Label(linkedNote, systemImage: "link")
+                        .font(.footnote.weight(.semibold))
+                        .padding(.horizontal, 16).padding(.vertical, 10)
+                        .glassEffect(.regular, in: .capsule)
+                        .padding(.bottom, 8)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                        .task(id: linkedNote) {
+                            try? await Task.sleep(nanoseconds: 3_000_000_000)
+                            withAnimation { self.linkedNote = nil }
+                        }
+                }
+            }
+            .animation(.snappy, value: linkedNote)
         }
     }
 
@@ -94,6 +114,12 @@ struct ParkMultiPicker: View {
                 selection.remove(at: i)
             } else {
                 selection.append(park)
+                // Parcs du même complexe (ex. les deux parcs Disney de Paris) : cochés d'office,
+                // on peut les décocher ensuite.
+                let siblings = queueTimes.siblings(of: park)
+                    .filter { s in !alreadyAdded.contains(s.id) && !selection.contains { $0.id == s.id } }
+                selection.append(contentsOf: siblings)
+                if !siblings.isEmpty { linkedNote = "Ajouté aussi : " + siblings.map(\.name).joined(separator: ", ") }
             }
         } label: {
             HStack {
