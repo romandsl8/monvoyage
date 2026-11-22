@@ -242,3 +242,29 @@ final class ParkProximityTests: XCTestCase {
         XCTAssertGreaterThan(QueueTimesService.distanceKm(48.8722344, 2.7758079, 33.8104856, -117.9190001), 5000)
     }
 }
+
+final class ParkHoursTests: XCTestCase {
+    func testScheduleParsingKeepsOperatingAndExtraHours() throws {
+        let json = """
+        {"timezone":"America/New_York","schedule":[
+          {"date":"2026-11-22","type":"OPERATING","openingTime":"2026-11-22T09:00:00-05:00","closingTime":"2026-11-22T20:00:00-05:00"},
+          {"date":"2026-11-22","type":"EXTRA_HOURS","description":"Early Park Admission","openingTime":"2026-11-22T08:00:00-05:00","closingTime":"2026-11-22T09:00:00-05:00"},
+          {"date":"2026-11-23","type":"ATTRACTION","openingTime":"2026-11-23T10:00:00-05:00","closingTime":"2026-11-23T11:00:00-05:00"}
+        ]}
+        """
+        let response = try JSONDecoder().decode(TPWSchedule.self, from: Data(json.utf8))
+        let schedule = ParkHoursService.build(response)
+        let day = try XCTUnwrap(schedule.day("2026-11-22"))
+        let tz = schedule.timeZone
+        XCTAssertEqual(ParkHoursService.range(try XCTUnwrap(day.open), try XCTUnwrap(day.close), timeZone: tz), "9h – 20h")
+        XCTAssertEqual(day.extra.count, 1)
+        XCTAssertEqual(ParkHoursList.frenchLabel(day.extra[0].label), "Ouverture anticipée (hôtels)")
+        XCTAssertTrue(try XCTUnwrap(schedule.day("2026-11-23")).isClosed)
+    }
+
+    func testNameTokensMatchQueueTimesAndThemeParksNames() {
+        let qt = ParkHoursService.tokens("Islands Of Adventure At Universal Orlando")
+        let tpw = ParkHoursService.tokens("Universal Islands of Adventure").union(ParkHoursService.tokens("Universal Orlando Resort"))
+        XCTAssertEqual(qt.intersection(tpw), qt)
+    }
+}

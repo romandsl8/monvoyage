@@ -8,6 +8,7 @@ struct WaitTimesBoard: View {
     @Environment(\.managedObjectContext) private var context
     @Environment(\.horizontalSizeClass) private var sizeClass
     @EnvironmentObject private var queueTimes: QueueTimesService
+    @ObservedObject private var hours = ParkHoursService.shared
 
     enum Sort: String, CaseIterable, Identifiable {
         case waitAsc, waitDesc, name, park
@@ -80,6 +81,7 @@ struct WaitTimesBoard: View {
             VStack(alignment: .leading, spacing: 12) {
                 filters
                 statusLine
+                if !parks.isEmpty { hoursStrip }
                 if parks.isEmpty {
                     EmptyState(symbol: "sparkles", title: "Aucun parc",
                                message: "Choisissez les parcs de votre voyage pour voir leurs temps d'attente en direct.",
@@ -170,11 +172,49 @@ struct WaitTimesBoard: View {
         .foregroundStyle(.secondary)
     }
 
+    // MARK: Horaires du jour
+
+    /// Une pastille par parc : ouvert / fermé et horaires du jour (touchez pour filtrer sur ce parc).
+    private var hoursStrip: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 10) {
+                ForEach(parks, id: \.objectID) { park in
+                    Button {
+                        parkFilter = parkFilter == park.queueTimesID ? nil : park.queueTimesID
+                    } label: {
+                        HStack(spacing: 10) {
+                            ParkPhotoBackground(park: park, tint: trip.accent, compact: true)
+                                .frame(width: 40, height: 40)
+                                .clipShape(.rect(cornerRadius: 10, style: .continuous))
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(park.wName).font(.subheadline.weight(.semibold)).lineLimit(1)
+                                if let schedule = hours.schedule(for: park) {
+                                    ParkHoursBadge(schedule: schedule)
+                                } else {
+                                    Text("Horaires indisponibles").font(.caption).foregroundStyle(.secondary)
+                                }
+                            }
+                        }
+                        .padding(10)
+                        .background(Color(.secondarySystemGroupedBackground), in: .rect(cornerRadius: 16, style: .continuous))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                .strokeBorder(parkFilter == park.queueTimesID ? trip.accent : .clear, lineWidth: 2)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+        .scrollClipDisabled()
+    }
+
     // MARK: Actions
 
     private func refresh() async {
         refreshing = true
         await queueTimes.refreshWaits(parkIDs: parks.map(\.queueTimesID))
+        await hours.refresh(parks: parks)   // au plus toutes les 6 h (cache)
         refreshing = false
     }
 

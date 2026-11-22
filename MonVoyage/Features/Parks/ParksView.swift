@@ -39,6 +39,7 @@ struct ParksListView: View {
     @ObservedObject var trip: Trip
     @Environment(\.managedObjectContext) private var context
     @EnvironmentObject private var queueTimes: QueueTimesService
+    @ObservedObject private var hours = ParkHoursService.shared
     @State private var showAddPark = false
 
     var body: some View {
@@ -63,6 +64,7 @@ struct ParksListView: View {
                         Text(park.wName).font(.headline)
                         Text(progress.total == 0 ? "\(park.attractionList.count) attraction(s)" : "\(progress.done)/\(progress.total) incontournables")
                             .font(.caption).foregroundStyle(.secondary)
+                        ParkHoursBadge(schedule: hours.schedule(for: park))
                     }
                     }
                 }
@@ -75,6 +77,7 @@ struct ParksListView: View {
         }
         .scrollContentBackground(.hidden)
         .groupedBackground()
+        .task(id: trip.parkList.map(\.queueTimesID)) { await hours.refresh(parks: trip.parkList) }
         .sheet(isPresented: $showAddPark) { ParkPickerView(trip: trip) }
     }
 }
@@ -119,6 +122,7 @@ struct ParkDetailView: View {
     @State private var editingAttraction: Attraction?
     @State private var showManualCrowd = false
     @State private var doneTick = 0
+    @ObservedObject private var hours = ParkHoursService.shared
 
     private var waits: WaitTimesCache? { queueTimes.waitTimes[park.queueTimesID] ?? queueTimes.cachedWaits(parkID: park.queueTimesID) }
 
@@ -133,6 +137,14 @@ struct ParkDetailView: View {
                     }
                 }
                 Button { showManualCrowd = true } label: { Label("Affluence et horaires (saisie manuelle)", systemImage: "person.3.sequence.fill") }
+            }
+
+            if park.queueTimesID > 0 {
+                Section {
+                    ParkHoursList(schedule: hours.schedule(for: park), tripDayKeys: trip.dayKeys, tint: trip.accent)
+                } header: {
+                    Label("Horaires d'ouverture", systemImage: "clock")
+                }
             }
 
             ForEach(groupedAttractions, id: \.day) { group in
@@ -181,7 +193,8 @@ struct ParkDetailView: View {
         .scrollContentBackground(.hidden)
         .groupedBackground()
         .toolbar { EditButton() }
-        .refreshable { await refreshWaits() }
+        .refreshable { await refreshWaits(); await hours.refresh(parks: [park], force: true) }
+        .task { await hours.refresh(parks: [park]) }
         .task {
             // Temps réel : actualisation toutes les minutes tant que l'écran est affiché.
             while !Task.isCancelled {
