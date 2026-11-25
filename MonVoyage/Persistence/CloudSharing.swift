@@ -75,19 +75,76 @@ enum CloudSharing {
         var current = share
         if share.publicPermission != .readWrite {
             share.publicPermission = .readWrite
-            current = try await persist(share, trip: trip)
+            current = (try? await persist(share, trip: trip)) ?? share
         }
-        guard let url = current.url ?? share.url else { throw SharingError.noLink }
+        if let url = current.url ?? share.url { return url }
+        // Pas de lien : le partage n'a jamais atteint le serveur (ex. créé avant que le
+        // schéma iCloud soit complet). On le récupère ou on l'enregistre directement sur iCloud.
+        let repaired = try await repairOnServer(current, trip: trip)
+        guard let url = repaired.url else { throw SharingError.noLink }
         return url
+    }
+
+    /// Récupère le partage sur iCloud, ou l'y enregistre (zone comprise) s'il est absent.
+    static func repairOnServer(_ share: CKShare, trip: Trip) async throws -> CKShare {
+        let database = CKContainer(identifier: PersistenceController.cloudKitContainerID).privateCloudDatabase
+        let zoneID = share.recordID.zoneID
+        var serverShare: CKShare?
+        do {
+            serverShare = try await database.record(for: share.recordID) as? CKShare
+        } catch let error as CKError where error.code == .unknownItem || error.code == .zoneNotFound {
+            serverShare = nil
+        } catch {
+            throw SharingError.cloud("lecture du partage", error)
+        }
+        if serverShare == nil {
+            do {
+                _ = try await database.modifyRecordZones(saving: [CKRecordZone(zoneID: zoneID)], deleting: [])
+            } catch {
+                throw SharingError.cloud("création de la zone de partage", error)
+            }
+            share.publicPermission = .readWrite
+            share[CKShare.SystemFieldKey.title] = trip.wName as CKRecordValue
+            do {
+                let result = try await database.modifyRecords(saving: [share], deleting: [], savePolicy: .allKeys)
+                if case .success(let record)? = result.saveResults[share.recordID] {
+                    serverShare = record as? CKShare
+                } else if case .failure(let error)? = result.saveResults[share.recordID] {
+                    throw error
+                }
+            } catch let error as SharingError {
+                throw error
+            } catch {
+                throw SharingError.cloud("enregistrement du partage", error)
+            }
+        } else if let existing = serverShare, existing.publicPermission != .readWrite {
+            existing.publicPermission = .readWrite
+            if let result = try? await database.modifyRecords(saving: [existing], deleting: [], savePolicy: .changedKeys),
+               case .success(let record)? = result.saveResults[existing.recordID] {
+                serverShare = record as? CKShare
+            }
+        }
+        guard let fixed = serverShare else { throw SharingError.noLink }
+        // Met à jour la copie locale du partage et relance la synchronisation du voyage.
+        if let store = controller.store(for: trip) {
+            controller.container.persistUpdatedShare(fixed, in: store) { _, _ in }
+        }
+        trip.updatedAt = Date()
+        trip.managedObjectContext?.saveIfNeeded()
+        return fixed
     }
 
     enum SharingError: LocalizedError {
         case timeout(String)
         case noLink
+        case cloud(String, Error)
         var errorDescription: String? {
             switch self {
             case .timeout(let step): return "iCloud ne répond pas (étape : \(step))"
             case .noLink: return "iCloud n'a pas fourni de lien d'invitation"
+            case .cloud(let step, let error):
+                let code = (error as? CKError).map { " [code \($0.errorCode)]" } ?? ""
+                return "erreur iCloud (\(step))\(code) : \(error.localizedDescription)"
             }
         }
     }
@@ -111,7 +168,10 @@ enum CloudSharing {
     /// (participants, arrêter / quitter le partage).
     static func presentSharingController(for trip: Trip) async throws {
         let hadShare = existingShare(for: trip) != nil
-        let share = try await share(trip)
+        var share = try await share(trip)
+        if share.url == nil && !isParticipant(trip) {
+            share = try await repairOnServer(share, trip: trip)
+        }
         let container = CKContainer(identifier: PersistenceController.cloudKitContainerID)
         guard let top = UIApplication.topViewController() else { return }
 
