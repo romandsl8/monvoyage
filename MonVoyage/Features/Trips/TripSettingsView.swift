@@ -82,9 +82,7 @@ struct TripSettingsView: View {
                             defer { checking = false }
                             let report = await CloudSharing.iCloudReport(for: trip)
                             UIPasteboard.general.string = report
-                            router.alertMessage = report + "
-
-(Ce message est copié : vous pouvez le coller pour l'envoyer.)"
+                            router.alertMessage = report + "\n\n(Ce message est copié : vous pouvez le coller pour l'envoyer.)"
                         }
                     } label: {
                         HStack {
