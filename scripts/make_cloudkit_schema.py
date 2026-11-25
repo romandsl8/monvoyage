@@ -114,15 +114,15 @@ USERS = """    RECORD TYPE Users (
 
 # Type système des partages (CKShare). Créé automatiquement en Development lors d'un
 # premier partage ; ici on l'ajoute au schéma pour qu'il soit déployé en Production.
-SHARE = """    RECORD TYPE cloudkit.share (
+SHARE = """    RECORD TYPE "cloudkit.share" (
         "___createTime" TIMESTAMP,
         "___createdBy"  REFERENCE,
         "___etag"       STRING,
         "___modTime"    TIMESTAMP,
         "___modifiedBy" REFERENCE,
         "___recordID"   REFERENCE,
-        cloudkit.title  STRING,
-        cloudkit.type   STRING,
+        "cloudkit.title" STRING,
+        "cloudkit.type"  STRING,
         GRANT WRITE TO "_creator",
         GRANT CREATE TO "_icloud",
         GRANT READ TO "_world"
