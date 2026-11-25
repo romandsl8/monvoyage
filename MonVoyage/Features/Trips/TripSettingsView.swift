@@ -1,5 +1,6 @@
 import SwiftUI
 import CoreData
+import UIKit
 
 /// Voyage et voyageurs : infos, partage, passeports / ESTA, rappels libres.
 struct TripSettingsView: View {
@@ -8,6 +9,7 @@ struct TripSettingsView: View {
     @EnvironmentObject private var nav: TripNavigation
     @EnvironmentObject private var router: AppRouter
     @State private var sharing = false
+    @State private var copyingLink = false
     @State private var newReminderTitle = ""
     @State private var newReminderDate = Date().addingTimeInterval(86400)
     @State private var exportURL: URL?
@@ -50,10 +52,32 @@ struct TripSettingsView: View {
                         if sharing { Spacer(); ProgressView() }
                     }
                 }
+                .disabled(sharing || copyingLink)
+                if !CloudSharing.isParticipant(trip) {
+                    Button {
+                        Task {
+                            copyingLink = true
+                            defer { copyingLink = false }
+                            do {
+                                let url = try await CloudSharing.invitationLink(for: trip)
+                                UIPasteboard.general.url = url
+                                router.alertMessage = "Lien d'invitation copié. Collez-le dans un message (SMS, WhatsApp, e-mail…) à la personne invitée : en le touchant, elle rejoindra le voyage dans MonVoyage."
+                            } catch {
+                                router.alertMessage = "Lien impossible à créer : \(error.localizedDescription). Vérifiez que vous êtes connecté à iCloud (Réglages › votre nom › iCloud) et à internet."
+                            }
+                        }
+                    } label: {
+                        HStack {
+                            Label("Copier le lien d'invitation", systemImage: "link")
+                            if copyingLink { Spacer(); ProgressView() }
+                        }
+                    }
+                    .disabled(sharing || copyingLink)
+                }
             } header: {
                 Text("Partage à deux")
             } footer: {
-                Text("Invitez l'autre voyageur par Messages ou par lien (lecture et écriture). Depuis « Gérer le partage », le propriétaire peut arrêter le partage et l'invité peut le quitter.")
+                Text("Invitez l'autre voyageur par Messages, ou copiez le lien d'invitation pour l'envoyer par n'importe quelle messagerie. L'invité pourra modifier le voyage. Depuis « Gérer le partage », le propriétaire peut arrêter le partage.")
             }
 
             ForEach(trip.travelerList, id: \.objectID) { traveler in

@@ -42,29 +42,68 @@ enum CloudSharing {
         return name.isEmpty ? nil : name
     }
 
-    /// Crée (ou récupère) le partage du voyage.
+    /// Crée (ou récupère) le partage du voyage. Chaque étape iCloud a un délai maximal :
+    /// en cas de blocage, l'erreur indique l'étape concernée au lieu de charger sans fin.
     static func share(_ trip: Trip) async throws -> CKShare {
         if let existing = existingShare(for: trip) { return existing }
         // Le voyage doit être enregistré avant d'être partagé.
         trip.managedObjectContext?.saveIfNeeded()
-        let share: CKShare = try await withCheckedThrowingContinuation { continuation in
+        let share: CKShare = try await withTimeout(45, step: "création du partage iCloud") { done in
             controller.container.share([trip], to: nil) { _, share, _, error in
-                if let share {
-                    continuation.resume(returning: share)
-                } else {
-                    continuation.resume(throwing: error ?? CKError(.internalError))
-                }
+                if let share { done(.success(share)) } else { done(.failure(error ?? CKError(.internalError))) }
             }
         }
-        // Titre affiché dans l'invitation, enregistré sur iCloud.
+        // Titre affiché dans l'invitation, enregistré sur iCloud (facultatif).
         share[CKShare.SystemFieldKey.title] = trip.wName as CKRecordValue
+        return (try? await persist(share, trip: trip)) ?? share
+    }
+
+    /// Enregistre une modification du partage sur iCloud.
+    static func persist(_ share: CKShare, trip: Trip) async throws -> CKShare {
         guard let store = controller.store(for: trip) else { return share }
-        let updated: CKShare? = await withCheckedContinuation { continuation in
-            controller.container.persistUpdatedShare(share, in: store) { saved, _ in
-                continuation.resume(returning: saved)
+        return try await withTimeout(30, step: "enregistrement du partage sur iCloud") { done in
+            controller.container.persistUpdatedShare(share, in: store) { saved, error in
+                if let saved { done(.success(saved)) } else { done(.failure(error ?? CKError(.internalError))) }
             }
         }
-        return updated ?? share
+    }
+
+    /// Lien d'invitation ouvert à toute personne qui le reçoit (lecture et écriture),
+    /// à envoyer par n'importe quelle messagerie.
+    static func invitationLink(for trip: Trip) async throws -> URL {
+        let share = try await share(trip)
+        var current = share
+        if share.publicPermission != .readWrite {
+            share.publicPermission = .readWrite
+            current = try await persist(share, trip: trip)
+        }
+        guard let url = current.url ?? share.url else { throw SharingError.noLink }
+        return url
+    }
+
+    enum SharingError: LocalizedError {
+        case timeout(String)
+        case noLink
+        var errorDescription: String? {
+            switch self {
+            case .timeout(let step): return "iCloud ne répond pas (étape : \(step))"
+            case .noLink: return "iCloud n'a pas fourni de lien d'invitation"
+            }
+        }
+    }
+
+    /// Attend un rappel iCloud au plus `seconds` secondes.
+    private static func withTimeout<T>(_ seconds: Double, step: String,
+                                       _ body: (@escaping (Result<T, Error>) -> Void) -> Void) async throws -> T {
+        let once = ResumeOnce()
+        return try await withCheckedThrowingContinuation { continuation in
+            DispatchQueue.main.asyncAfter(deadline: .now() + seconds) {
+                if once.claim() { continuation.resume(throwing: SharingError.timeout(step)) }
+            }
+            body { result in
+                if once.claim() { continuation.resume(with: result) }
+            }
+        }
     }
 
     /// Invitation : feuille de partage iOS (Messages, Mail, Copier le lien…) avec le partage iCloud
@@ -155,5 +194,17 @@ extension UIApplication {
         var top = window?.rootViewController
         while let presented = top?.presentedViewController { top = presented }
         return top
+    }
+}
+
+/// Garantit qu'une continuation n'est reprise qu'une seule fois (réponse iCloud ou délai dépassé).
+private final class ResumeOnce: @unchecked Sendable {
+    private let lock = NSLock()
+    private var done = false
+    func claim() -> Bool {
+        lock.lock(); defer { lock.unlock() }
+        if done { return false }
+        done = true
+        return true
     }
 }
