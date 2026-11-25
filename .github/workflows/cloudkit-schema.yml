@@ -46,7 +46,7 @@ jobs:
             --environment production \
             --output-file build/schema-production.ckdb
           echo "== Types en Production :"; grep -o "RECORD TYPE [^ ]*" build/schema-production.ckdb
-          grep -A14 "RECORD TYPE cloudkit.share" build/schema-production.ckdb || echo "cloudkit.share ABSENT en Production"
+          grep -A14 'RECORD TYPE "cloudkit.share"' build/schema-production.ckdb || echo "cloudkit.share ABSENT en Production"
 
       - name: Sauvegarder le schéma actuel (Development)
         run: |

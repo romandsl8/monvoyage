@@ -10,6 +10,7 @@ struct TripSettingsView: View {
     @EnvironmentObject private var router: AppRouter
     @State private var sharing = false
     @State private var copyingLink = false
+    @State private var checking = false
     @State private var newReminderTitle = ""
     @State private var newReminderDate = Date().addingTimeInterval(86400)
     @State private var exportURL: URL?
@@ -73,6 +74,21 @@ struct TripSettingsView: View {
                         }
                     }
                     .disabled(sharing || copyingLink)
+                }
+                if CloudSharing.isShared(trip) {
+                    Button {
+                        Task {
+                            checking = true
+                            defer { checking = false }
+                            router.alertMessage = await CloudSharing.iCloudReport(for: trip)
+                        }
+                    } label: {
+                        HStack {
+                            Label("Vérifier le partage sur iCloud", systemImage: "checkmark.icloud")
+                            if checking { Spacer(); ProgressView() }
+                        }
+                    }
+                    .disabled(sharing || copyingLink || checking)
                 }
             } header: {
                 Text("Partage à deux")

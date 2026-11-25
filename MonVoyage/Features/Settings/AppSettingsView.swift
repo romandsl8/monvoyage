@@ -1,5 +1,6 @@
 import SwiftUI
 import CloudKit
+import UIKit
 
 /// Réglages de l'appli : taux forcé, affluence, rappels, tables aéroports / compagnies, version.
 struct AppSettingsView: View {
@@ -51,6 +52,8 @@ struct AppSettingsView: View {
                 } header: { Text("Affluence des parcs") } footer: {
                     Text("Fichier publié chaque jour par votre workflow GitHub. Sans fichier, saisissez l'affluence à la main dans Parcs.")
                 }
+
+                SharedWithMeSection()
 
                 Section("Rappels") {
                     Toggle("Notifications", isOn: $settings.notificationsEnabled)
@@ -219,6 +222,55 @@ enum CloudKitErrorReport {
             }
         } catch {
             return "erreur : \(error.localizedDescription)"
+        }
+    }
+}
+
+/// Invité : vérifier les voyages partagés avec moi, ou rejoindre en collant le lien d'invitation.
+struct SharedWithMeSection: View {
+    @State private var linkText = ""
+    @State private var report: String?
+    @State private var busy = false
+
+    private var link: URL? {
+        let text = linkText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let url = URL(string: text), url.scheme == "https", url.host?.hasSuffix("icloud.com") == true else { return nil }
+        return url
+    }
+
+    var body: some View {
+        Section {
+            Button {
+                Task {
+                    busy = true
+                    defer { busy = false }
+                    report = await CloudSharing.sharedWithMeReport()
+                }
+            } label: {
+                HStack { Label("Vérifier les voyages partagés avec moi", systemImage: "checkmark.icloud"); if busy { Spacer(); ProgressView() } }
+            }
+            .disabled(busy)
+            HStack {
+                TextField("Coller le lien d'invitation", text: $linkText)
+                    .keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled()
+                Button("Coller") { linkText = UIPasteboard.general.string ?? linkText }
+                    .buttonStyle(.borderless)
+            }
+            Button {
+                guard let link else { return }
+                Task {
+                    busy = true
+                    defer { busy = false }
+                    do { report = try await CloudSharing.join(link: link); linkText = "" }
+                    catch { report = "Impossible de rejoindre le voyage : \(error.localizedDescription)" }
+                }
+            } label: { Label("Rejoindre le voyage", systemImage: "person.2.badge.plus") }
+            .disabled(busy || link == nil)
+            if let report {
+                Text(report).font(.footnote).textSelection(.enabled)
+            }
+        } header: { Text("Voyages partagés avec moi") } footer: {
+            Text("Si toucher le lien d'invitation n'a rien affiché, collez-le ici. Le voyage apparaît ensuite dans Mes voyages après la synchronisation iCloud (jusqu'à une minute).")
         }
     }
 }

@@ -129,8 +129,7 @@ enum CloudSharing {
         if let store = controller.store(for: trip) {
             controller.container.persistUpdatedShare(fixed, in: store) { _, _ in }
         }
-        trip.updatedAt = Date()
-        trip.managedObjectContext?.saveIfNeeded()
+        resendTripData(trip)
         return fixed
     }
 
@@ -200,9 +199,193 @@ enum CloudSharing {
         top.present(activity, animated: true)
     }
 
+
+    // MARK: - Contrôle et réparation du contenu partagé
+
+    /// Marque tous les éléments du voyage comme modifiés pour qu'iCloud les reçoive à nouveau
+    /// (utile si un premier envoi a échoué, par exemple avant que le schéma soit complet).
+    /// Ne supprime ni ne change aucune donnée.
+    @discardableResult
+    static func resendTripData(_ trip: Trip) -> Int {
+        guard let context = trip.managedObjectContext else { return 0 }
+        let store = trip.objectID.persistentStore
+        var seen = Set<NSManagedObjectID>()
+        var queue: [NSManagedObject] = [trip]
+        let now = Date()
+        while let object = queue.popLast() {
+            guard !object.isDeleted, object.objectID.persistentStore == store,
+                  seen.insert(object.objectID).inserted else { continue }
+            if object.entity.attributesByName["updatedAt"] != nil { object.setValue(now, forKey: "updatedAt") }
+            for (name, relationship) in object.entity.relationshipsByName {
+                let value = object.value(forKey: name)
+                if relationship.isToMany {
+                    if let set = value as? NSSet { queue += set.allObjects.compactMap { $0 as? NSManagedObject } }
+                    if let set = value as? NSOrderedSet { queue += set.array.compactMap { $0 as? NSManagedObject } }
+                } else if let other = value as? NSManagedObject {
+                    queue.append(other)
+                }
+            }
+        }
+        context.saveIfNeeded()
+        return seen.count
+    }
+
+    private static func codeText(_ error: Error) -> String {
+        (error as? CKError).map { " [code \($0.errorCode)]" } ?? ""
+    }
+
+    private static func displayName(_ participant: CKShare.Participant) -> String {
+        if let components = participant.userIdentity.nameComponents {
+            let name = PersonNameComponentsFormatter.localizedString(from: components, style: .default)
+            if !name.isEmpty { return name }
+        }
+        return participant.userIdentity.lookupInfo?.emailAddress ?? participant.userIdentity.lookupInfo?.phoneNumber ?? "Invité"
+    }
+
+    /// Nombre d'enregistrements par type dans une zone iCloud.
+    private static func zoneCounts(_ database: CKDatabase, zoneID: CKRecordZone.ID) async throws -> [String: Int] {
+        var counts: [String: Int] = [:]
+        var token: CKServerChangeToken?
+        var more = true
+        while more {
+            let changes = try await database.recordZoneChanges(inZoneWith: zoneID, since: token,
+                                                               desiredKeys: ["CD_entityName"], resultsLimit: nil)
+            for (_, result) in changes.modificationResultsByID {
+                if case .success(let modification) = result {
+                    counts[modification.record.recordType, default: 0] += 1
+                }
+            }
+            token = changes.changeToken
+            more = changes.moreComing
+        }
+        return counts
+    }
+
+    private static func describe(_ counts: [String: Int]) -> String {
+        let trips = counts["CD_Trip"] ?? 0
+        let items = counts.filter { $0.key.hasPrefix("CD_") }.values.reduce(0, +)
+        return "\(trips) voyage\(trips > 1 ? "s" : ""), \(items) élément\(items > 1 ? "s" : "") au total"
+    }
+
+    /// Ce qu'iCloud contient réellement pour ce voyage partagé (propriétaire ou invité).
+    /// Côté propriétaire, si le voyage n'est pas sur iCloud, ses données sont renvoyées.
+    static func iCloudReport(for trip: Trip) async -> String {
+        guard let share = existingShare(for: trip) else { return "Ce voyage n'est pas encore partagé." }
+        let participant = isParticipant(trip)
+        let ck = CKContainer(identifier: PersistenceController.cloudKitContainerID)
+        let database = participant ? ck.sharedCloudDatabase : ck.privateCloudDatabase
+        var lines: [String] = []
+        do {
+            if let server = try await database.record(for: share.recordID) as? CKShare {
+                let access: String
+                switch server.publicPermission {
+                case .readWrite: access = "toute personne ayant le lien (modification)"
+                case .readOnly: access = "toute personne ayant le lien (lecture)"
+                default: access = "sur invitation uniquement"
+                }
+                lines.append("Partage sur iCloud : présent, lien \(server.url == nil ? "absent" : "actif"), accès \(access).")
+                let others = server.participants.filter { $0.role != .owner }
+                if others.isEmpty { lines.append("Personne n'a encore rejoint le voyage.") }
+                for p in others {
+                    let status: String
+                    switch p.acceptanceStatus {
+                    case .accepted: status = "a rejoint"
+                    case .pending: status = "invitation en attente"
+                    case .removed: status = "retiré"
+                    default: status = "état inconnu"
+                    }
+                    lines.append("• \(displayName(p)) : \(status)")
+                }
+            } else {
+                lines.append("Partage introuvable sur iCloud.")
+            }
+        } catch {
+            lines.append("Partage illisible sur iCloud\(codeText(error)) : \(error.localizedDescription)")
+        }
+        do {
+            let counts = try await zoneCounts(database, zoneID: share.recordID.zoneID)
+            lines.append("Contenu partagé sur iCloud : \(describe(counts)).")
+            if !participant && (counts["CD_Trip"] ?? 0) == 0 {
+                let n = resendTripData(trip)
+                lines.append("Le voyage manquait sur iCloud : \(n) éléments viennent d'être renvoyés. Laissez l'appli ouverte une minute puis vérifiez à nouveau.")
+            }
+        } catch {
+            lines.append("Contenu illisible sur iCloud\(codeText(error)) : \(error.localizedDescription)")
+            if !participant {
+                let n = resendTripData(trip)
+                lines.append("\(n) éléments du voyage viennent d'être renvoyés. Vérifiez à nouveau dans une minute.")
+            }
+        }
+        return lines.joined(separator: "\n")
+    }
+
+    /// Côté invité : voyages partagés avec moi, sur l'iPhone et sur iCloud.
+    static func sharedWithMeReport() async -> String {
+        var lines: [String] = []
+        let ck = CKContainer(identifier: PersistenceController.cloudKitContainerID)
+        if let status = try? await ck.accountStatus(), status != .available {
+            lines.append("⚠️ Compte iCloud indisponible sur cet iPhone (Réglages › votre nom › iCloud).")
+        }
+        guard let sharedStore = controller.sharedStore else {
+            return (lines + ["Le stockage des voyages partagés n'a pas pu être chargé. Redémarrez l'appli."]).joined(separator: "\n")
+        }
+        let request = NSFetchRequest<NSManagedObject>(entityName: "Trip")
+        request.affectedStores = [sharedStore]
+        let local = (try? controller.viewContext.count(for: request)) ?? 0
+        lines.append("Sur cet iPhone : \(local) voyage\(local > 1 ? "s" : "") partagé\(local > 1 ? "s" : "") avec moi.")
+        do {
+            let zones = try await ck.sharedCloudDatabase.allRecordZones()
+            if zones.isEmpty {
+                lines.append("Sur iCloud : aucun voyage partagé n'a été rejoint avec ce compte. Collez le lien d'invitation ci-dessous pour le rejoindre.")
+            }
+            for zone in zones {
+                do {
+                    let counts = try await zoneCounts(ck.sharedCloudDatabase, zoneID: zone.zoneID)
+                    lines.append("Sur iCloud, voyage partagé avec moi : \(describe(counts)).")
+                } catch {
+                    lines.append("Partage illisible sur iCloud\(codeText(error)) : \(error.localizedDescription)")
+                }
+            }
+        } catch {
+            lines.append("Lecture iCloud impossible\(codeText(error)) : \(error.localizedDescription)")
+        }
+        return lines.joined(separator: "\n")
+    }
+
+    /// Rejoint un voyage à partir du lien d'invitation collé (si toucher le lien n'a rien fait).
+    static func join(link: URL) async throws -> String {
+        let ck = CKContainer(identifier: PersistenceController.cloudKitContainerID)
+        let metadata: CKShare.Metadata = try await withTimeout(30, step: "lecture de l'invitation") { done in
+            let operation = CKFetchShareMetadataOperation(shareURLs: [link])
+            let box = MetadataBox()
+            operation.perShareMetadataResultBlock = { _, result in box.result = result }
+            operation.fetchShareMetadataResultBlock = { result in
+                if case .failure(let error) = result { done(.failure(error)); return }
+                done(box.result ?? .failure(SharingError.noLink))
+            }
+            ck.add(operation)
+        }
+        let title = (metadata.share[CKShare.SystemFieldKey.title] as? String) ?? "partagé"
+        if metadata.participantRole == .owner {
+            return "Ce lien est celui de votre propre voyage « \(title) » : il doit être ouvert par la personne invitée, sur son iPhone."
+        }
+        guard let sharedStore = controller.sharedStore else {
+            throw SharingError.cloud("stockage des voyages partagés non chargé", CKError(.internalError))
+        }
+        let _: Bool = try await withTimeout(60, step: "acceptation de l'invitation") { done in
+            controller.container.acceptShareInvitations(from: [metadata], into: sharedStore) { _, error in
+                if let error { done(.failure(error)) } else { done(.success(true)) }
+            }
+        }
+        return "Vous avez rejoint le voyage « \(title) ». Il apparaîtra dans Mes voyages d'ici une minute, le temps de la synchronisation iCloud."
+    }
+
     /// Accepte une invitation reçue dans le magasin partagé.
     static func accept(_ metadata: CKShare.Metadata) {
-        guard let sharedStore = controller.sharedStore else { return }
+        guard let sharedStore = controller.sharedStore else {
+            AppRouter.shared.alertMessage = "Impossible de rejoindre le voyage partagé : le stockage des voyages partagés n'a pas pu être chargé. Redémarrez l'appli puis touchez à nouveau le lien."
+            return
+        }
         controller.container.acceptShareInvitations(from: [metadata], into: sharedStore) { _, error in
             let title = metadata.share[CKShare.SystemFieldKey.title] as? String
             Task { @MainActor in
@@ -267,4 +450,9 @@ private final class ResumeOnce: @unchecked Sendable {
         done = true
         return true
     }
+}
+
+/// Résultat de lecture d'une invitation (rempli par CloudKit avant le rappel final).
+private final class MetadataBox: @unchecked Sendable {
+    var result: Result<CKShare.Metadata, Error>?
 }
