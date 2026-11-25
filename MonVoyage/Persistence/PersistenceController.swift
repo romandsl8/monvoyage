@@ -63,6 +63,7 @@ final class PersistenceController {
             container.persistentStoreDescriptions = [privateDesc, sharedDesc]
         }
 
+        if !inMemory { SyncEventLog.shared.start(self) }
         var firstError: Error?
         container.loadPersistentStores { description, error in
             if let error {

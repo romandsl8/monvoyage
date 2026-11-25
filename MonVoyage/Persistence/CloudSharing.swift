@@ -316,6 +316,7 @@ enum CloudSharing {
                 lines.append("\(n) éléments du voyage viennent d'être renvoyés. Vérifiez à nouveau dans une minute.")
             }
         }
+        lines.append("\nSynchronisation iCloud de cet iPhone :\n" + SyncEventLog.shared.summary())
         return lines.joined(separator: "\n")
     }
 
@@ -349,6 +350,7 @@ enum CloudSharing {
         } catch {
             lines.append("Lecture iCloud impossible\(codeText(error)) : \(error.localizedDescription)")
         }
+        lines.append("\nSynchronisation iCloud de cet iPhone :\n" + SyncEventLog.shared.summary())
         return lines.joined(separator: "\n")
     }
 
