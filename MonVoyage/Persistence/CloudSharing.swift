@@ -47,37 +47,72 @@ enum CloudSharing {
         if let existing = existingShare(for: trip) { return existing }
         // Le voyage doit être enregistré avant d'être partagé.
         trip.managedObjectContext?.saveIfNeeded()
-        return try await withCheckedThrowingContinuation { continuation in
+        let share: CKShare = try await withCheckedThrowingContinuation { continuation in
             controller.container.share([trip], to: nil) { _, share, _, error in
                 if let share {
-                    share[CKShare.SystemFieldKey.title] = trip.wName as CKRecordValue
                     continuation.resume(returning: share)
                 } else {
                     continuation.resume(throwing: error ?? CKError(.internalError))
                 }
             }
         }
+        // Titre affiché dans l'invitation, enregistré sur iCloud.
+        share[CKShare.SystemFieldKey.title] = trip.wName as CKRecordValue
+        guard let store = controller.store(for: trip) else { return share }
+        let updated: CKShare? = await withCheckedContinuation { continuation in
+            controller.container.persistUpdatedShare(share, in: store) { saved, _ in
+                continuation.resume(returning: saved)
+            }
+        }
+        return updated ?? share
     }
 
-    /// Présente la feuille de partage iCloud (invitation par Messages ou lien, lecture/écriture).
+    /// Invitation : feuille de partage iOS (Messages, Mail, Copier le lien…) avec le partage iCloud
+    /// en lecture et écriture. Si quelqu'un a déjà rejoint, ouvre la gestion du partage
+    /// (participants, arrêter / quitter le partage).
     static func presentSharingController(for trip: Trip) async throws {
+        let hadShare = existingShare(for: trip) != nil
         let share = try await share(trip)
         let container = CKContainer(identifier: PersistenceController.cloudKitContainerID)
-        let sharingController = UICloudSharingController(share: share, container: container)
-        sharingController.availablePermissions = [.allowReadWrite, .allowPrivate]
-        let delegate = SharingDelegate(tripName: trip.wName, store: controller.store(for: trip))
-        SharingDelegate.current = delegate
-        sharingController.delegate = delegate
-        sharingController.modalPresentationStyle = .formSheet
         guard let top = UIApplication.topViewController() else { return }
-        top.present(sharingController, animated: true)
+
+        let others = share.participants.filter { $0.role != .owner }
+        if isParticipant(trip) || (hadShare && !others.isEmpty) {
+            let sharingController = UICloudSharingController(share: share, container: container)
+            sharingController.availablePermissions = [.allowReadWrite, .allowPrivate]
+            let delegate = SharingDelegate(tripName: trip.wName, store: controller.store(for: trip))
+            SharingDelegate.current = delegate
+            sharingController.delegate = delegate
+            sharingController.modalPresentationStyle = .formSheet
+            top.present(sharingController, animated: true)
+            return
+        }
+
+        let provider = NSItemProvider()
+        let options = CKAllowedSharingOptions(allowedParticipantPermissionOptions: .readWrite,
+                                              allowedParticipantAccessOptions: .any)
+        provider.registerCKShare(share, container: container, allowedSharingOptions: options)
+        let activity = UIActivityViewController(activityItemsConfiguration: UIActivityItemsConfiguration(itemProviders: [provider]))
+        if let popover = activity.popoverPresentationController {
+            popover.sourceView = top.view
+            popover.sourceRect = CGRect(x: top.view.bounds.midX, y: top.view.bounds.midY, width: 0, height: 0)
+            popover.permittedArrowDirections = []
+        }
+        top.present(activity, animated: true)
     }
 
     /// Accepte une invitation reçue dans le magasin partagé.
     static func accept(_ metadata: CKShare.Metadata) {
         guard let sharedStore = controller.sharedStore else { return }
         controller.container.acceptShareInvitations(from: [metadata], into: sharedStore) { _, error in
-            if let error { print("Acceptation du partage impossible : \(error)") }
+            let title = metadata.share[CKShare.SystemFieldKey.title] as? String
+            Task { @MainActor in
+                if let error {
+                    AppRouter.shared.alertMessage = "Impossible de rejoindre le voyage partagé : \(error.localizedDescription). Vérifiez que vous êtes connecté à iCloud."
+                } else {
+                    AppRouter.shared.alertMessage = "Vous avez rejoint le voyage « \(title ?? "partagé") ». Il apparaîtra dans Mes voyages d'ici quelques instants, le temps de la synchronisation iCloud."
+                }
+            }
         }
     }
 }
