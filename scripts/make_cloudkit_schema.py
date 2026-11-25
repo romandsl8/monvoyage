@@ -112,6 +112,22 @@ USERS = """    RECORD TYPE Users (
         GRANT READ TO "_world"
     );"""
 
+# Type système des partages (CKShare). Créé automatiquement en Development lors d'un
+# premier partage ; ici on l'ajoute au schéma pour qu'il soit déployé en Production.
+SHARE = """    RECORD TYPE cloudkit.share (
+        "___createTime" TIMESTAMP,
+        "___createdBy"  REFERENCE,
+        "___etag"       STRING,
+        "___modTime"    TIMESTAMP,
+        "___modifiedBy" REFERENCE,
+        "___recordID"   REFERENCE,
+        cloudkit.title  STRING,
+        cloudkit.type   STRING,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud",
+        GRANT READ TO "_world"
+    );"""
+
 ENTITIES = []
 
 
@@ -120,7 +136,7 @@ def main():
     out = sys.argv[1] if len(sys.argv) > 1 else os.path.join(ROOT, "build", "cloudkit-schema.ckdb")
     model = ET.parse(current_model_path()).getroot()
     ENTITIES = model.findall("entity")
-    parts = ["DEFINE SCHEMA", "", USERS, ""]
+    parts = ["DEFINE SCHEMA", "", USERS, "", SHARE, ""]
     for entity in ENTITIES:
         parts.append(record_type(entity))
         parts.append("")

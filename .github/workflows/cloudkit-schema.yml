@@ -34,8 +34,23 @@ jobs:
           python3 scripts/make_cloudkit_schema.py build/cloudkit-schema.ckdb
           cat build/cloudkit-schema.ckdb
 
+      - name: Masquer l'identifiant d'équipe dans les journaux
+        run: echo "::add-mask::$CLOUDKIT_TEAM_ID"
+
+      - name: Schéma actuel en Production (lecture seule)
+        continue-on-error: true
+        run: |
+          xcrun cktool export-schema \
+            --team-id "$CLOUDKIT_TEAM_ID" \
+            --container-id "$ICLOUD_CONTAINER" \
+            --environment production \
+            --output-file build/schema-production.ckdb
+          echo "== Types en Production :"; grep -o "RECORD TYPE [^ ]*" build/schema-production.ckdb
+          grep -A14 "RECORD TYPE cloudkit.share" build/schema-production.ckdb || echo "cloudkit.share ABSENT en Production"
+
       - name: Sauvegarder le schéma actuel (Development)
         run: |
+          mkdir -p build
           xcrun cktool export-schema \
             --team-id "$CLOUDKIT_TEAM_ID" \
             --container-id "$ICLOUD_CONTAINER" \
