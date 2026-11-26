@@ -17,6 +17,7 @@ struct TripListView: View {
     @State private var showSettings = false
     @State private var showArchived = false
     @State private var showImporter = false
+    @State private var showRecovery = false
     @State private var exportURL: URL?
     @State private var tripToDelete: Trip?
 
@@ -35,6 +36,10 @@ struct TripListView: View {
                                    message: "Créez votre premier voyage pour préparer le budget, le planning et les réservations.",
                                    actionTitle: "Créer un voyage") { showNewTrip = true }
                             .padding(.top, 60)
+                        Button { showRecovery = true } label: {
+                            Label("Un voyage a disparu ? Le récupérer", systemImage: "arrow.counterclockwise.icloud")
+                        }
+                        .frame(maxWidth: .infinity)
                     } else {
                         LazyVGrid(columns: columns, spacing: 16) {
                             ForEach(active, id: \.objectID) { trip in
@@ -64,12 +69,14 @@ struct TripListView: View {
                     Menu {
                         Button { showNewTrip = true } label: { Label("Nouveau voyage", systemImage: "plus") }
                         Button { showImporter = true } label: { Label("Importer une archive", systemImage: "square.and.arrow.down") }
+                        Button { showRecovery = true } label: { Label("Récupérer des voyages", systemImage: "arrow.counterclockwise.icloud") }
                         Button { exportAll() } label: { Label("Exporter tous les voyages", systemImage: "square.and.arrow.up") }
                     } label: {
                         Label("Ajouter", systemImage: "plus")
                     }
                 }
             }
+            .sheet(isPresented: $showRecovery) { TripRecoveryView() }
             .sheet(isPresented: $showNewTrip) {
                 TripEditorView(trip: nil, onCreated: { trip in onOpen(trip) })
             }

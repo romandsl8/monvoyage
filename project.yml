@@ -67,6 +67,7 @@ targets:
       properties:
         com.apple.developer.icloud-container-identifiers:
           - $(ICLOUD_CONTAINER)
+          - iCloud.fr.tanguy.monvoyage
         com.apple.developer.icloud-services:
           - CloudKit
         com.apple.developer.icloud-container-environment: $(CLOUDKIT_ENV)

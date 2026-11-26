@@ -24,6 +24,30 @@ final class DataTests: XCTestCase {
         return trip
     }
 
+    func testTripRecoveryCopiesWholeTripIntoCurrentBase() throws {
+        let trip = makeTrip()
+        let traveler = context.make(Traveler.self, trip: trip)
+        traveler.name = "Maxime"
+        traveler.trip = trip
+        context.saveIfNeeded()
+
+        let destination = PersistenceController.shared.viewContext
+        let before = TripRecovery.presentTripIDs(in: destination)
+        let found = TripRecovery.trips(in: controller.container, present: before)
+        XCTAssertEqual(found.count, 1)
+        XCTAssertGreaterThanOrEqual(found[0].items, 2)
+
+        let copied = try TripRecovery.restore(tripURI: found[0].id, from: controller.container)
+        XCTAssertEqual(copied, found[0].items)
+        let request = NSFetchRequest<Trip>(entityName: "Trip")
+        request.predicate = NSPredicate(format: "id == %@", trip.id! as CVarArg)
+        let restored = try XCTUnwrap(try destination.fetch(request).first)
+        XCTAssertEqual(restored.name, "Floride")
+        XCTAssertEqual(restored.totalBudgetEUR, 6000)
+        XCTAssertEqual(restored.travelerList.map(\.name), ["Maxime"])
+        XCTAssertTrue(TripRecovery.trips(in: controller.container, present: TripRecovery.presentTripIDs(in: destination))[0].alreadyPresent)
+    }
+
     func testChecklistTemplatesAreAddedOnceWithDueDates() {
         let trip = makeTrip()
         trip.startDate = DayKey.noon(Date().addingTimeInterval(120 * 86400))
