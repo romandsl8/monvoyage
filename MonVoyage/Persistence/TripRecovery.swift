@@ -139,15 +139,33 @@ enum TripRecovery {
         var values: [String: Any]
     }
 
-    static func fetchOldCloud() async throws -> [String: CloudObject] {
+    static func fetchOldCloud() async throws -> (objects: [String: CloudObject], notes: [String]) {
         let database = CKContainer(identifier: oldContainerID).privateCloudDatabase
         let zones = try await database.allRecordZones()
         var objects: [String: CloudObject] = [:]
-        for zone in zones {
+        var notes: [String] = []
+        // La zone par défaut d'iCloud ne se lit pas par « changements » et ne contient pas
+        // les données Core Data (rangées dans com.apple.coredata.cloudkit.zone et les zones de partage).
+        for zone in zones where zone.zoneID.zoneName != CKRecordZone.ID.defaultZoneName {
+            let before = objects.count
+            do {
+                try await fetchZone(zone.zoneID, in: database, into: &objects)
+                notes.append("Zone \(zone.zoneID.zoneName) : \(objects.count - before) éléments lus.")
+            } catch {
+                let code = (error as? CKError).map { " [code \($0.errorCode)]" } ?? ""
+                notes.append("Zone \(zone.zoneID.zoneName) illisible\(code) : \(error.localizedDescription)")
+            }
+        }
+        return (objects, notes)
+    }
+
+    private static func fetchZone(_ zoneID: CKRecordZone.ID, in database: CKDatabase,
+                                  into objects: inout [String: CloudObject]) async throws {
+        do {
             var token: CKServerChangeToken?
             var more = true
             while more {
-                let changes = try await database.recordZoneChanges(inZoneWith: zone.zoneID, since: token,
+                let changes = try await database.recordZoneChanges(inZoneWith: zoneID, since: token,
                                                                    desiredKeys: nil, resultsLimit: nil)
                 for (_, result) in changes.modificationResultsByID {
                     guard case .success(let modification) = result else { continue }
@@ -171,7 +189,6 @@ enum TripRecovery {
                 more = changes.moreComing
             }
         }
-        return objects
     }
 
     /// Enregistrements reliés à un voyage (par les relations « vers un »).
@@ -301,9 +318,11 @@ final class TripRecoveryModel: ObservableObject {
         loadingCloud = true
         defer { loadingCloud = false }
         do {
-            cloudObjects = try await TripRecovery.fetchOldCloud()
+            let result = try await TripRecovery.fetchOldCloud()
+            cloudObjects = result.objects
             cloudTrips = TripRecovery.cloudTrips(cloudObjects, present: present)
-            cloudStatus = cloudTrips.isEmpty ? "Aucun voyage trouvé dans l'ancien iCloud." : nil
+            let notes = result.notes.isEmpty ? "Aucune zone de données dans l'ancien iCloud." : result.notes.joined(separator: "\n")
+            cloudStatus = (cloudTrips.isEmpty ? "Aucun voyage trouvé dans l'ancien iCloud.\n" : "") + notes
         } catch {
             let code = (error as? CKError).map { " [code \($0.errorCode)]" } ?? ""
             cloudStatus = "Ancien iCloud illisible\(code) : \(error.localizedDescription)"
