@@ -17,7 +17,7 @@ final class PersistenceController {
     }
 
     static var cloudKitContainerID: String {
-        (Bundle.main.object(forInfoDictionaryKey: "CloudKitContainerID") as? String) ?? "iCloud.fr.tanguy.monvoyage"
+        (Bundle.main.object(forInfoDictionaryKey: "CloudKitContainerID") as? String) ?? "iCloud.fr.tanguy.monvoyage2"
     }
 
     /// Modèle chargé une seule fois (évite les doublons d'entités dans les tests).

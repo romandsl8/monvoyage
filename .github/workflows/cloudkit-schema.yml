@@ -18,7 +18,7 @@ jobs:
     runs-on: xcode-27
     timeout-minutes: 15
     env:
-      ICLOUD_CONTAINER: iCloud.fr.tanguy.monvoyage
+      ICLOUD_CONTAINER: iCloud.fr.tanguy.monvoyage2
       CLOUDKIT_TEAM_ID: ${{ vars.CLOUDKIT_TEAM_ID }}
       CLOUDKIT_MANAGEMENT_TOKEN: ${{ secrets.CLOUDKIT_MANAGEMENT_TOKEN }}
     steps:

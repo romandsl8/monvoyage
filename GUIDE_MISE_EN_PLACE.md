@@ -19,7 +19,7 @@ Ils sont centralisés **en haut de `project.yml`** et dans la section `env` de *
 | Nom de la fiche App Store Connect | `MonVoyage Planner` |
 | Bundle ID de l'appli | `fr.tanguy.monvoyage` |
 | Bundle ID du widget | `fr.tanguy.monvoyage.widget` |
-| Conteneur iCloud | `iCloud.fr.tanguy.monvoyage` |
+| Conteneur iCloud | `iCloud.fr.tanguy.monvoyage2` |
 | App Group | `group.fr.tanguy.monvoyage` |
 | Identifiant Apple de l'appli | `6837239666` |
 
@@ -96,7 +96,7 @@ Site : **https://developer.apple.com/account** → **Certificates, Identifiers &
 ### 2.1 Conteneur iCloud
 1. Bouton **+** (à côté de « Identifiers »).
 2. Choisissez **iCloud Containers** → **Continue**.
-3. **Description** : `MonVoyage` ; **Identifier** : `iCloud.fr.tanguy.monvoyage` → **Continue** → **Register**.
+3. **Description** : `MonVoyage` ; **Identifier** : `iCloud.fr.tanguy.monvoyage2` → **Continue** → **Register**.
 
 ### 2.2 App Group
 1. **+** → **App Groups** → **Continue**.
@@ -112,7 +112,7 @@ Site : **https://developer.apple.com/account** → **Certificates, Identifiers &
 4. **Continue** → **Register**.
 5. Rouvrez l'App ID `fr.tanguy.monvoyage` dans la liste :
    - à côté de **App Groups**, cliquez **Configure** (ou *Edit*) → cochez `group.fr.tanguy.monvoyage` → **Continue** → **Save** ;
-   - à côté de **iCloud**, cliquez **Configure** (ou *Edit*) → cochez `iCloud.fr.tanguy.monvoyage` → **Continue** → **Save**.
+   - à côté de **iCloud**, cliquez **Configure** (ou *Edit*) → cochez `iCloud.fr.tanguy.monvoyage2` → **Continue** → **Save**.
 6. ✅ Vérification : sur la fiche de l'App ID, App Groups, iCloud et Push Notifications sont cochés, et « Configure » indique 1 groupe / 1 conteneur.
 
 ### 2.4 App ID du widget
@@ -192,7 +192,7 @@ Pourquoi : les builds TestFlight utilisent **toujours** l'environnement iCloud *
 2. ✅ Toutes les étapes vertes. 🔁 Si une étape est rouge, envoyez à Claude Code son nom et ses dernières lignes.
 
 ### 6.3 Déployer en Production
-1. https://icloud.developer.apple.com → **CloudKit Database** → conteneur `iCloud.fr.tanguy.monvoyage` → environnement **Development** → **Schema → Record Types** : vous voyez `CD_Trip`, `CD_Expense`, etc. ✅
+1. https://icloud.developer.apple.com → **CloudKit Database** → conteneur `iCloud.fr.tanguy.monvoyage2` → environnement **Development** → **Schema → Record Types** : vous voyez `CD_Trip`, `CD_Expense`, etc. ✅
 2. **Deploy Schema Changes…** (bas du menu de gauche) → vérifiez la liste → **Deploy**.
 3. Basculez sur **Production** : les mêmes `CD_…` apparaissent. ✅
 
