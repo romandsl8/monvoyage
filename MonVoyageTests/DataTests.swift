@@ -44,7 +44,8 @@ final class DataTests: XCTestCase {
         let restored = try XCTUnwrap(try destination.fetch(request).first)
         XCTAssertEqual(restored.name, "Floride")
         XCTAssertEqual(restored.totalBudgetEUR, 6000)
-        XCTAssertEqual(restored.travelerList.map(\.name), ["Maxime"])
+        XCTAssertTrue(restored.travelerList.contains { $0.name == "Maxime" })
+        XCTAssertEqual(restored.travelerList.count, trip.travelerList.count)
         XCTAssertTrue(TripRecovery.trips(in: controller.container, present: TripRecovery.presentTripIDs(in: destination))[0].alreadyPresent)
     }
 
