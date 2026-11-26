@@ -42,7 +42,7 @@ final class SyncEventLog: @unchecked Sendable {
             @unknown default: kind = "autre"
             }
             let store = event.storeIdentifier == controller?.sharedStore?.identifier ? "partagé" : "privé"
-            let error = event.error.map { String(CloudKitErrorReport.describe($0).prefix(1500)) }
+            let error = event.error.map { String(CloudKitErrorReport.describe($0).prefix(4000)) }
             self?.append(Entry(date: event.endDate ?? Date(), kind: kind, store: store,
                                succeeded: event.succeeded, error: error))
         }
@@ -57,7 +57,7 @@ final class SyncEventLog: @unchecked Sendable {
     }
 
     /// Résumé lisible : dernier envoi réussi, dernières erreurs.
-    func summary(limit: Int = 3) -> String {
+    func summary(limit: Int = 2) -> String {
         let list = entries
         guard !list.isEmpty else { return "Aucune synchronisation iCloud enregistrée depuis l'installation de cette version." }
         let formatter = DateFormatter()

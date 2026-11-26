@@ -193,13 +193,27 @@ enum CloudKitErrorReport {
         let ns = error as NSError
         let indent = String(repeating: "  ", count: depth)
         var lines = ["\(indent)\(ns.domain) \(ns.code) : \(ns.localizedDescription)"]
+        let useful: Set<String> = ["ServerErrorDescription", "NSDebugDescription", "CKErrorDescription"]
         for (key, value) in ns.userInfo where key != NSUnderlyingErrorKey && key != CKPartialErrorsByItemIDKey {
+            if depth > 0 && !useful.contains(key) { continue }
             let text = String(describing: value)
-            lines.append("\(indent)  \(key) = \(text.prefix(600))")
+            lines.append("\(indent)  \(key) = \(text.prefix(400))")
         }
         if let partial = ns.userInfo[CKPartialErrorsByItemIDKey] as? [AnyHashable: Error] {
-            for (item, sub) in partial.prefix(5) {
-                lines.append("\(indent)  élément \(item) :")
+            // « Atomic failure » (22) n'est qu'une conséquence : on montre d'abord la vraie cause.
+            let causes = partial.filter { ($0.value as NSError).code != CKError.batchRequestFailed.rawValue }
+            let atomic = partial.count - causes.count
+            lines.append("\(indent)  \(partial.count) élément(s) refusé(s), dont \(atomic) par simple effet de lot.")
+            for (item, sub) in causes.prefix(3) {
+                var name = String(describing: item)
+                if let id = item as? CKRecord.ID { name = id.recordName }
+                lines.append("\(indent)  ⚠️ cause, élément \(name) :")
+                lines.append(describe(sub, depth: depth + 2))
+            }
+            if causes.isEmpty, let first = partial.first {
+                let item = first.key, sub = first.value
+                let name = (item as? CKRecord.ID)?.recordName ?? String(describing: item)
+                lines.append("\(indent)  élément \(name) :")
                 lines.append(describe(sub, depth: depth + 2))
             }
         }

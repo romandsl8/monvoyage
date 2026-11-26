@@ -275,8 +275,10 @@ enum CloudSharing {
         let ck = CKContainer(identifier: PersistenceController.cloudKitContainerID)
         let database = participant ? ck.sharedCloudDatabase : ck.privateCloudDatabase
         var lines: [String] = []
+        var serverShare: CKShare?
         do {
             if let server = try await database.record(for: share.recordID) as? CKShare {
+                serverShare = server
                 let access: String
                 switch server.publicPermission {
                 case .readWrite: access = "toute personne ayant le lien (modification)"
@@ -301,6 +303,22 @@ enum CloudSharing {
             }
         } catch {
             lines.append("Partage illisible sur iCloud\(codeText(error)) : \(error.localizedDescription)")
+        }
+        // Le partage change sur iCloud quand quelqu'un le rejoint : si la copie gardée par
+        // Core Data est périmée, chaque envoi du voyage est refusé. On la remet à jour.
+        if !participant, let server = serverShare, let store = controller.store(for: trip) {
+            let stale = share.recordChangeTag != server.recordChangeTag
+            do {
+                let _: CKShare = try await withTimeout(30, step: "mise à jour de la copie locale du partage") { done in
+                    controller.container.persistUpdatedShare(server, in: store) { saved, error in
+                        if let saved { done(.success(saved)) } else { done(.failure(error ?? CKError(.internalError))) }
+                    }
+                }
+                lines.append(stale ? "La copie du partage sur cet iPhone était périmée : elle vient d'être remise à jour."
+                                   : "Copie du partage sur cet iPhone à jour.")
+            } catch {
+                lines.append("Copie du partage sur cet iPhone non mise à jour\(codeText(error)) : \(error.localizedDescription)")
+            }
         }
         do {
             let counts = try await zoneCounts(database, zoneID: share.recordID.zoneID)
