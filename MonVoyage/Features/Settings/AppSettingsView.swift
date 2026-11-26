@@ -276,10 +276,22 @@ struct SharedWithMeSection: View {
                     busy = true
                     defer { busy = false }
                     do { report = try await CloudSharing.join(link: link); linkText = "" }
-                    catch { report = "Impossible de rejoindre le voyage : \(error.localizedDescription)" }
+                    catch {
+                        if SharedStoreReset.looksCorrupted(error) {
+                            SharedStoreReset.request()
+                            report = "Le stockage des voyages partagés est bloqué par un ancien lien. Il sera remis à zéro : fermez complètement l'appli, rouvrez-la, puis collez le NOUVEAU lien."
+                        } else {
+                            report = "Impossible de rejoindre le voyage : \(error.localizedDescription)"
+                        }
+                    }
                 }
             } label: { Label("Rejoindre le voyage", systemImage: "person.2.badge.plus") }
             .disabled(busy || link == nil)
+            Button(role: .destructive) {
+                SharedStoreReset.request()
+                report = "Remise à zéro programmée. Fermez complètement l'appli (balayez-la vers le haut) puis rouvrez-la. Vos propres voyages ne sont pas touchés ; les voyages partagés avec vous seront retéléchargés."
+            } label: { Label("Réinitialiser les voyages partagés avec moi", systemImage: "arrow.counterclockwise.icloud") }
+            .disabled(busy)
             if let report {
                 Text(report).font(.footnote).textSelection(.enabled)
             }

@@ -55,6 +55,7 @@ final class PersistenceController {
             container.persistentStoreDescriptions = [description]
         } else {
             StoreBackup.backupBeforeLoading(storeURLs: [Self.privateStoreURL, Self.sharedStoreURL])
+            SharedStoreReset.performIfRequested(storeURL: Self.sharedStoreURL, model: Self.model)
 
             let privateDesc = NSPersistentStoreDescription(url: Self.privateStoreURL)
             configure(privateDesc, scope: .private)

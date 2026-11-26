@@ -372,6 +372,14 @@ enum CloudSharing {
         return lines.joined(separator: "\n")
     }
 
+    /// Un lien créé avant le changement de conteneur iCloud pointe vers l'ancien conteneur :
+    /// l'accepter bloquerait le stockage partagé. On le refuse avec une explication.
+    static func oldLinkProblem(_ metadata: CKShare.Metadata) -> String? {
+        let current = PersistenceController.cloudKitContainerID
+        guard metadata.containerIdentifier != current else { return nil }
+        return "Ce lien d'invitation date d'avant la mise à jour du partage : il ne fonctionne plus. Demandez à l'organisateur d'ouvrir le voyage, Réglages du voyage › Partager, puis de vous envoyer le NOUVEAU lien."
+    }
+
     /// Rejoint un voyage à partir du lien d'invitation collé (si toucher le lien n'a rien fait).
     static func join(link: URL) async throws -> String {
         let ck = CKContainer(identifier: PersistenceController.cloudKitContainerID)
@@ -386,6 +394,7 @@ enum CloudSharing {
             ck.add(operation)
         }
         let title = (metadata.share[CKShare.SystemFieldKey.title] as? String) ?? "partagé"
+        if let problem = oldLinkProblem(metadata) { return problem }
         if metadata.participantRole == .owner {
             return "Ce lien est celui de votre propre voyage « \(title) » : il doit être ouvert par la personne invitée, sur son iPhone."
         }
@@ -402,6 +411,10 @@ enum CloudSharing {
 
     /// Accepte une invitation reçue dans le magasin partagé.
     static func accept(_ metadata: CKShare.Metadata) {
+        if let problem = oldLinkProblem(metadata) {
+            AppRouter.shared.alertMessage = problem
+            return
+        }
         guard let sharedStore = controller.sharedStore else {
             AppRouter.shared.alertMessage = "Impossible de rejoindre le voyage partagé : le stockage des voyages partagés n'a pas pu être chargé. Redémarrez l'appli puis touchez à nouveau le lien."
             return
@@ -410,6 +423,11 @@ enum CloudSharing {
             let title = metadata.share[CKShare.SystemFieldKey.title] as? String
             Task { @MainActor in
                 if let error {
+                    if SharedStoreReset.looksCorrupted(error) {
+                        SharedStoreReset.request()
+                        AppRouter.shared.alertMessage = "Le stockage des voyages partagés de cet iPhone est bloqué par un ancien lien d'invitation. Il sera remis à zéro : fermez complètement l'appli (balayez-la vers le haut), rouvrez-la, puis touchez le NOUVEAU lien envoyé par l'organisateur."
+                        return
+                    }
                     AppRouter.shared.alertMessage = "Impossible de rejoindre le voyage partagé : \(error.localizedDescription). Vérifiez que vous êtes connecté à iCloud."
                 } else {
                     AppRouter.shared.alertMessage = "Vous avez rejoint le voyage « \(title ?? "partagé") ». Il apparaîtra dans Mes voyages d'ici quelques instants, le temps de la synchronisation iCloud."

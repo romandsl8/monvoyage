@@ -42,6 +42,9 @@ final class SyncEventLog: @unchecked Sendable {
             @unknown default: kind = "autre"
             }
             let store = event.storeIdentifier == controller?.sharedStore?.identifier ? "partagé" : "privé"
+            if store == "partagé", let raw = event.error, SharedStoreReset.looksCorrupted(raw) {
+                SharedStoreReset.request()
+            }
             let error = event.error.map { String(CloudKitErrorReport.describe($0).prefix(4000)) }
             self?.append(Entry(date: event.endDate ?? Date(), kind: kind, store: store,
                                succeeded: event.succeeded, error: error))
