@@ -7,7 +7,7 @@ selon la correspondance utilisée par NSPersistentCloudKitContainer :
   attribut a          -> champ CD_a
   relation to-one r   -> champ CD_r (STRING : nom de l'enregistrement lié)
   relation to-many    -> rien (portée par la relation inverse to-one)
-  + CD_entityName (STRING), CD_moveReceipt (ASSET)
+  + CD_entityName (STRING), CD_moveReceipt (BYTES)
   + CD_a_ckAsset (ASSET) pour les textes et données binaires (valeurs volumineuses)
 
 Pourquoi : les builds TestFlight utilisent toujours l'environnement Production ;
@@ -68,7 +68,8 @@ def record_type(entity):
     name = entity.get("name")
     fields = list(SYSTEM_FIELDS)
     fields.append(('"CD_entityName"', "STRING QUERYABLE"))
-    fields.append(('"CD_moveReceipt"', "ASSET"))
+    # Reçu de déplacement (objet passé d'une zone à une autre, ex. au partage) : octets.
+    fields.append(('"CD_moveReceipt"', "BYTES"))
     for attr in entity.findall("attribute"):
         if attr.get("transient") == "YES":
             continue
